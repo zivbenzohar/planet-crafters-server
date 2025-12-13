@@ -20,6 +20,11 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+// ✅ add these
+app.use("/", require("./routes/index"));
+app.use("/api/auth", require("./routes/api/auth"));
+app.use("/api/users", require("./routes/api/users"));
+
 app.get('/ping', (req, res) => {
   res.json({ message: 'pong from main server' });
 });

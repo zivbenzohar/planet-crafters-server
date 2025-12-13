@@ -1,6 +1,6 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
-const config = require("config");
+//const config = require("config");
 const jwt = require("jsonwebtoken");
 const router = express.Router();
 
@@ -41,7 +41,7 @@ router.post("/", (req, res) => {
             {
               id: user.id,
             },
-            config.get("jwtSecret"),
+            process.env.JWT_SECRET,
             {
               expiresIn: 3600, //1hour
             },
