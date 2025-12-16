@@ -1,4 +1,4 @@
-const coopService = require('../services/coopService');
+const coopService = require("../../services/coopService");
 
 module.exports = (io) => {
   io.on('connection', (socket) => {

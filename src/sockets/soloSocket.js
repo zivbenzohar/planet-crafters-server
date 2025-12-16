@@ -1,4 +1,4 @@
-const soloService = require('../services/soloService');
+const soloService = require("../../services/soloService");
 module.exports = (io) => {
   io.on('connection', (socket) => {
 
