@@ -5,99 +5,108 @@ const auth = require("../../middleware/auth");
 const UserStageState = require("../../model/UserStageState_model");
 const buildStackForStage = require("../../services/buildStackForStage");
 
+const toDto = (state) => ({
+  stageId: state.stageId,
+  map: state.map,
+  hand: state.hand,
+  deck: state.deck,
+  progress: state.progress,
+});
+
+// נורמליזציה: לוודא שמערכים הם string[]
+const normalizeIds = (arr) =>
+  Array.isArray(arr) ? arr.map((x) => String(x)).filter(Boolean) : [];
+
 /**
- * GET /api/stages/:stage/state
- * - אם יש State שמור למשתמש בשלב הזה -> מחזיר אותו
- * - אם אין -> יוצר ערימה ראשונית, שומר מסמך חדש, ומחזיר אותו
+ * GET /api/stages/:stageId/state
+ * Load (ואם אין עדיין state -> יצירה ראשונית)
  */
-router.get("/:stage/state", auth, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const stage = Number(req.params.stage);
+router.get("/:stageId/state", auth, async (req, res) => {
+  const userId = String(req.user.id);
+  const stageId = String(req.params.stageId);
 
-    let state = await UserStageState.findOne({ userId, stage })
-      // populate כדי שהקליינט יקבל edges/texture בלי עוד קריאות
-      .populate("placedTiles.templateId")
-      .populate("remainingStack.templateId");
+  let state = await UserStageState.findOne({ userId, stageId });
 
-    if (!state) {
-      const remainingStack = await buildStackForStage(stage, 30);
+  if (!state) {
+    const rawTiles = await buildStackForStage(stageId, 30);
+    const tiles = Array.isArray(rawTiles)
+      ? rawTiles
+          .map((t) =>
+            typeof t === "string"
+              ? t
+              : String(t?.templateId ?? t?._id ?? t)
+          )
+          .filter(Boolean)
+      : [];
 
-      const created = await UserStageState.create({
-        userId,
-        stage,
-        placedTiles: [],
-        remainingStack,
-      });
+    const maxHandSize = 3;
 
-      state = await UserStageState.findById(created._id)
-        .populate("placedTiles.templateId")
-        .populate("remainingStack.templateId");
-    }
-
-    return res.json(state);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ msg: "Server error", error: err.message });
+    state = await UserStageState.create({
+      userId,
+      stageId,
+      map: { placedTiles: [] },
+      hand: { maxHandSize, tilesInHand: tiles.slice(0, maxHandSize) },
+      deck: { remainingTiles: tiles.slice(maxHandSize) },
+      progress: { developedPercent: 0, score: 0, isCompleted: false },
+    });
   }
+
+  res.json(toDto(state));
 });
 
 /**
- * POST /api/stages/:stage/place
- * body: { instanceId, q, r, rotation }
- * - מוציא את המשושה הראשון מהערימה
- * - שם אותו ב-placedTiles עם מיקום וסיבוב
- * - שומר ומחזיר state מעודכן
+ * PUT /api/stages/:stageId/state
+ * Save מלא (קוראים לזה בכל הנחה)
  */
-router.post("/:stage/place", auth, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const stage = Number(req.params.stage);
-    const { instanceId, q, r, rotation = 0 } = req.body;
+router.put("/:stageId/state", auth, async (req, res) => {
+  const userId = String(req.user.id);
+  const stageId = String(req.params.stageId);
 
-    if (!instanceId || q === undefined || r === undefined) {
-      return res.status(400).json({ msg: "Missing instanceId/q/r" });
-    }
+  const { map, hand, deck, progress } = req.body;
 
-    const state = await UserStageState.findOne({ userId, stage });
-    if (!state) {
-      return res.status(404).json({ msg: "State not found. Call GET /state first." });
-    }
-
-    if (state.remainingStack.length === 0) {
-      return res.status(400).json({ msg: "No tiles left in stack" });
-    }
-
-    // מונע הנחה על תא תפוס
-    const occupied = state.placedTiles.some((t) => t.q === q && t.r === r);
-    if (occupied) {
-      return res.status(409).json({ msg: "Cell already occupied" });
-    }
-
-    // מוציאים משושה ראשון מהערימה (ל-POC)
-    const next = state.remainingStack.shift();
-
-    // מוסיפים ללוח
-    state.placedTiles.push({
-      instanceId,
-      templateId: next.templateId,
-      q,
-      r,
-      rotation,
-    });
-
-    state.version++;
-    await state.save();
-
-    const populated = await UserStageState.findById(state._id)
-      .populate("placedTiles.templateId")
-      .populate("remainingStack.templateId");
-
-    return res.json(populated);
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ msg: "Server error", error: err.message });
+  if (!map || !hand || !deck || !progress) {
+    return res.status(400).json({ msg: "Missing map/hand/deck/progress" });
   }
+
+  const placedTiles = Array.isArray(map.placedTiles) ? map.placedTiles : [];
+
+  const tilesInHand = normalizeIds(hand.tilesInHand);
+  const remainingTiles = normalizeIds(deck.remainingTiles);
+
+  const maxHandSize = Number(hand.maxHandSize ?? 3);
+
+  const saved = await UserStageState.findOneAndUpdate(
+    { userId, stageId },
+    {
+      $set: {
+        map: { placedTiles },
+        hand: { maxHandSize, tilesInHand },
+        deck: { remainingTiles },
+        progress: {
+          developedPercent: Number(progress.developedPercent ?? 0),
+          score: Number(progress.score ?? 0),
+          isCompleted: Boolean(progress.isCompleted ?? false),
+        },
+      },
+    },
+    { new: true, upsert: true, runValidators: true }
+  );
+
+  res.json(toDto(saved));
+});
+
+/**
+ * POST /api/stages/:stageId/reset
+ * מחיקה מלאה של כל נתוני השלב למשתמש (מסמך נמחק)
+ */
+router.post("/:stageId/reset", auth, async (req, res) => {
+  const userId = String(req.user.id);
+  const stageId = String(req.params.stageId);
+
+  await UserStageState.deleteOne({ userId, stageId });
+
+  // מחזירים ok. הלקוח יכול לקרוא GET /state כדי להתחיל מחדש.
+  res.json({ ok: true });
 });
 
 module.exports = router;

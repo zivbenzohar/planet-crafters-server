@@ -1,42 +1,7 @@
-// const mongoose = require("mongoose");
-
-// const Schema = mongoose.Schema;
-
-// const UserSchema = new Schema({
-//   name: {
-//     type: String,
-//     required: true,
-//   },
-//   email: {
-//     type: String,
-//     required: true,
-//   },
-//   password: {
-//     type: String,
-//     required: true,
-//   },
-//   refreshToken: { 
-//     type: String,
-//     default: null,
-//   },
-//   register_date: {
-//     type: Date,
-//     default: Date.now,
-//   },
-// });
-
-// module.exports = User = mongoose.model("user", UserSchema);
-
-
 // model/User_model.js
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
-/**
- * User:
- * כולל hashing לסיסמה לפני שמירה (חובה).
- * כולל פונקציה להשוואת סיסמה בזמן Login.
- */
 const UserSchema = new mongoose.Schema(
   {
     name: {
@@ -45,10 +10,16 @@ const UserSchema = new mongoose.Schema(
       trim: true,
     },
 
+    userName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
     email: {
       type: String,
       required: true,
-      unique: true, // שלא יהיו שני משתמשים עם אותו מייל
+      unique: true, 
       lowercase: true,
       trim: true,
     },
@@ -56,7 +27,6 @@ const UserSchema = new mongoose.Schema(
     password: {
       type: String,
       required: true,
-      // כאן יישמר ה-hash, לא הסיסמה המקורית
     },
 
     refreshToken: {
@@ -64,7 +34,22 @@ const UserSchema = new mongoose.Schema(
       default: null,
     },
 
-    register_date: {
+    world: {
+      stagesMeta: [
+        {
+          stageId: { type: String, required: true },
+          isUnlocked: { type: Boolean, default: false },
+          isCompleted: { type: Boolean, default: false },
+        },
+      ],
+    },
+
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+
+    updatedAt: {
       type: Date,
       default: Date.now,
     },

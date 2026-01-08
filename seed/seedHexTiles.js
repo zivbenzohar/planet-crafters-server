@@ -4,102 +4,58 @@ const mongoose = require("mongoose");
 const HexTileTemplate = require("../model/HexTile_model");
 
 const tiles = [
-  {
-    type: "halfGoldRock",
-    edges: ["gold", "gold", "rock", "rock", "rock", "rock"],
-    texture: "hex_gold_lvl1.png",
-    level: 1,
-  },
-  {
-    type: "halfRockBio",
-    edges: ["rock", "rock", "bio", "bio", "bio", "bio"],
-    texture: "hex_rock_bio_lvl1.png",
-    level: 1,
-  },
-  {
-    type: "halfBioCrystal",
-    edges: ["bio", "bio", "crystal", "crystal", "crystal", "crystal"],
-    texture: "hex_bio_crystal_lvl1.png",
-    level: 1,
-  },
-  {
-    type: "tripleGoldTripleRock",
-    edges: ["gold", "gold", "gold", "rock", "rock", "rock"],
-    texture: "hex_gold_rock_3_3_lvl1.png",
-    level: 1,
-  },
-  {
-    type: "tripleBioTripleRock",
-    edges: ["bio", "bio", "bio", "rock", "rock", "rock"],
-    texture: "hex_bio_rock_3_3_lvl1.png",
-    level: 1,
-  },
-  {
-    type: "tripleCrystalTripleBio",
-    edges: ["crystal", "crystal", "crystal", "bio", "bio", "bio"],
-    texture: "hex_crystal_bio_3_3_lvl1.png",
-    level: 1,
-  },
-  {
-    type: "fourRockTwoGold",
-    edges: ["rock", "rock", "rock", "rock", "gold", "gold"],
-    texture: "hex_rock_gold_4_2_lvl1.png",
-    level: 1,
-  },
-  {
-    type: "fourBioTwoRock",
-    edges: ["bio", "bio", "bio", "bio", "rock", "rock"],
-    texture: "hex_bio_rock_4_2_lvl1.png",
-    level: 1,
-  },
-  {
-    type: "fourGoldTwoCrystal",
-    edges: ["gold", "gold", "gold", "gold", "crystal", "crystal"],
-    texture: "hex_gold_crystal_4_2_lvl1.png",
-    level: 1,
-  },
-  {
-    type: "allRock",
-    edges: ["rock", "rock", "rock", "rock", "rock", "rock"],
-    texture: "hex_rock_lvl1.png",
-    level: 1,
-  },
-  {
-    type: "allGold",
-    edges: ["gold", "gold", "gold", "gold", "gold", "gold"],
-    texture: "hex_gold_lvl1_full.png",
-    level: 1,
-  },
-  {
-    type: "allBio",
-    edges: ["bio", "bio", "bio", "bio", "bio", "bio"],
-    texture: "hex_bio_lvl1.png",
-    level: 1,
-  },
-  {
-    type: "allCrystal",
-    edges: ["crystal", "crystal", "crystal", "crystal", "crystal", "crystal"],
-    texture: "hex_crystal_lvl1.png",
-    level: 1,
-  },
-  {
-    type: "twoTwoTwo_mix",
-    edges: ["gold", "gold", "rock", "rock", "bio", "bio"],
-    texture: "hex_mix_2_2_2_lvl1.png",
-    level: 1,
-  },
-  {
-    type: "alternating_gold_rock",
-    edges: ["gold", "rock", "gold", "rock", "gold", "rock"],
-    texture: "hex_alt_gold_rock_lvl1.png",
-    level: 1,
-  },
-];
+  // =========================
+  // 4–2 (12)
+  // =========================
+  { "type": "moreRockGold", "center": "rock", "edges": ["rock","rock","rock","rock","gold","gold"], "level": 1 },
+  { "type": "moreRockBio", "center": "rock", "edges": ["rock","rock","rock","rock","bio","bio"], "level": 1 },
+  { "type": "moreRockCrystal", "center": "rock", "edges": ["rock","rock","rock","rock","crystal","crystal"], "level": 1 },
+
+  { "type": "moreGoldRock", "center": "gold", "edges": ["gold","gold","gold","gold","rock","rock"], "level": 1 },
+  { "type": "moreGoldBio", "center": "gold", "edges": ["gold","gold","gold","gold","bio","bio"], "level": 1 },
+  { "type": "moreGoldCrystal", "center": "gold", "edges": ["gold","gold","gold","gold","crystal","crystal"], "level": 1 },
+
+  { "type": "moreBioRock", "center": "bio", "edges": ["bio","bio","bio","bio","rock","rock"], "level": 1 },
+  { "type": "moreBioGold", "center": "bio", "edges": ["bio","bio","bio","bio","gold","gold"], "level": 1 },
+  { "type": "moreBioCrystal", "center": "bio", "edges": ["bio","bio","bio","bio","crystal","crystal"], "level": 1 },
+
+  { "type": "moreCrystalRock", "center": "crystal", "edges": ["crystal","crystal","crystal","crystal","rock","rock"], "level": 1 },
+  { "type": "moreCrystalGold", "center": "crystal", "edges": ["crystal","crystal","crystal","crystal","gold","gold"], "level": 1 },
+  { "type": "moreCrystalBio", "center": "crystal", "edges": ["crystal","crystal","crystal","crystal","bio","bio"], "level": 1 },
+
+  // =========================
+  // 3–3 (6)
+  // =========================
+  { "type": "halfRockGold", "center": "rock", "edges": ["rock","rock","rock","gold","gold","gold"], "level": 1 },
+  { "type": "halfRockBio", "center": "rock", "edges": ["rock","rock","rock","bio","bio","bio"], "level": 1 },
+  { "type": "halfRockCrystal", "center": "rock", "edges": ["rock","rock","rock","crystal","crystal","crystal"], "level": 1 },
+
+  { "type": "halfGoldBio", "center": "gold", "edges": ["gold","gold","gold","bio","bio","bio"], "level": 1 },
+  { "type": "halfGoldCrystal", "center": "gold", "edges": ["gold","gold","gold","crystal","crystal","crystal"], "level": 1 },
+  { "type": "halfBioCrystal", "center": "bio", "edges": ["bio","bio","bio","crystal","crystal","crystal"], "level": 1 },
+
+  // =========================
+  // 2–2–2 (4)
+  // =========================
+  { "type": "tripleRockGoldBio", "center": "rock", "edges": ["rock","rock","gold","gold","bio","bio"], "level": 1 },
+  { "type": "tripleRockGoldCrystal", "center": "rock", "edges": ["rock","rock","gold","gold","crystal","crystal"], "level": 1 },
+  { "type": "tripleRockBioCrystal", "center": "rock", "edges": ["rock","rock","bio","bio","crystal","crystal"], "level": 1 },
+  { "type": "tripleGoldBioCrystal", "center": "gold", "edges": ["gold","gold","bio","bio","crystal","crystal"], "level": 1 },
+
+  // =========================
+  // all (4)
+  // =========================
+  { "type": "allRock", "center": "rock", "edges": ["rock","rock","rock","rock","rock","rock"], "level": 1 },
+  { "type": "allGold", "center": "gold", "edges": ["gold","gold","gold","gold","gold","gold"], "level": 1 },
+  { "type": "allBio", "center": "bio", "edges": ["bio","bio","bio","bio","bio","bio"], "level": 1 },
+  { "type": "allCrystal", "center": "crystal", "edges": ["crystal","crystal","crystal","crystal","crystal","crystal"], "level": 1 }
+]
+
 
 // בדיקה בסיסית שכל tile תקין
 function validateTiles() {
   for (const t of tiles) {
-    if (!t.type || !t.texture || !Array.isArray(t.edges) || t.edges.length !== 6) {
+    if (!t.type || !t.center || !Array.isArray(t.edges) || t.edges.length !== 6) {
       throw new Error("Invalid tile in seed list: " + JSON.stringify(t));
     }
   }

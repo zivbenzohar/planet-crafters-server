@@ -9,8 +9,6 @@ router.get("/", function (req, res, next) {
 router.use("/api/users", require("./api/users"));     // Register
 router.use("/api/auth", require("./api/auth"));       // Login/refresh/logout/user
 router.use("/api/stages", require("./api/stageState"));// Stage state & place
-
-module.exports = router;
-
+router.use("/api/hex-tiles", require("./api/hexTiles"));
 
 module.exports = router;
