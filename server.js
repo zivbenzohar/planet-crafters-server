@@ -22,9 +22,6 @@ app.use(express.json());
 
 // ✅ add these
 app.use("/", require("./routes/index"));
-app.use("/api/auth", require("./routes/api/auth"));
-app.use("/api/users", require("./routes/api/users"));
-app.use("/api/stages", require("./routes/api/stageState"));
 
 
 app.get('/ping', (req, res) => {

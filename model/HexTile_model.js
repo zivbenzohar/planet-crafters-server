@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 /**
  * HexTileTemplate:
  * זהו "קטלוג" של סוגי משושים קבועים (Templates).
- * חשוב: לא שומרים פה position! מיקום שייך ל-State של המשתמש (UserStageState).
+ * חשוב: לא שומרים פה position! מיקום שייך ל-State של המשתמש (StageState).
  */
 const HexTileSchema = new mongoose.Schema(
   {

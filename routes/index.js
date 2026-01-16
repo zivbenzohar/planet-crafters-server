@@ -8,7 +8,8 @@ router.get("/", function (req, res, next) {
 
 router.use("/api/users", require("./api/users"));     // Register
 router.use("/api/auth", require("./api/auth"));       // Login/refresh/logout/user
-router.use("/api/stages", require("./api/stageState"));// Stage state & place
 router.use("/api/hex-tiles", require("./api/hexTiles"));
+router.use("/api/planets", require("./api/planet"));
+router.use("/api/planet-state", require("./api/planetState"));
 
 module.exports = router;

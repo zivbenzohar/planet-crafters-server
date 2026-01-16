@@ -34,14 +34,10 @@ const UserSchema = new mongoose.Schema(
       default: null,
     },
 
-    world: {
-      stagesMeta: [
-        {
-          stageId: { type: String, required: true },
-          isUnlocked: { type: Boolean, default: false },
-          isCompleted: { type: Boolean, default: false },
-        },
-      ],
+    activePlanetId: {
+      type: String, // למשל "planet_01"
+      default: null,
+      index: true,
     },
 
     createdAt: {

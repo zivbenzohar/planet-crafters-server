@@ -9,8 +9,8 @@ const User = require("../model/User_model");
  * כי במודל User יש pre('save') שעושה hashing אוטומטי.
  */
 const users = [
-  { name: "Test One", email: "test1@mail.com", userName: "testone", password: "123456" },
-  { name: "Test Two", email: "test2@mail.com", userName: "testtwo", password: "123456" },
+  { name: "Test One", email: "test1@mail.com", userName: "testone", password: "123456", activePlanetId: "planet_01" },
+  { name: "Test Two", email: "test2@mail.com", userName: "testtwo", password: "123456", activePlanetId: "planet_01" },
 ];
 
 async function main() {
@@ -32,6 +32,7 @@ async function main() {
       email: u.email.trim().toLowerCase(),
       userName: u.userName.trim(),
       password: u.password, // ייהפך ל-hash בעת save
+      activePlanetId: u.activePlanetId || null,
     });
     await user.save();
   }
