@@ -20,6 +20,8 @@ const PlanetSchema = new mongoose.Schema(
       type: [PlanetStageSchema],
       default: [],
     },
+
+    totalCoins: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

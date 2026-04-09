@@ -64,14 +64,15 @@ async function getStageState({ userId, planetId, stageId, deckSize }) {
   const stage = planet.stages[0];
   let state = stage.state || emptyStageState();
 
+  const level       = stageLevel(stage, stageId);
+  const targetScore = getTargetScore(level);
+
   const hasDeck =
     state.deck &&
     Array.isArray(state.deck.remainingTiles) &&
     state.deck.remainingTiles.length > 0;
 
   if (!hasDeck) {
-    const level       = stageLevel(stage, stageId);
-    const targetScore = getTargetScore(level);
     const { hand, deck } = await createDeckAndHand(deckSize, 3, { level, targetScore });
 
     state = { ...state, hand, deck };
@@ -104,6 +105,7 @@ async function getStageState({ userId, planetId, stageId, deckSize }) {
     stageId,
     meta: stage.meta,
     state,
+    targetScore,
   };
 }
 
@@ -140,7 +142,7 @@ async function resetStageState({ userId, planetId, stageId }) {
     map: { placedTiles: [] },
     hand: { maxHandSize: 3, tilesInHand: [] },
     deck: { remainingTiles: [] },
-    progress: { developedPercent: 0, score: 0, isCompleted: false, connectionsByResource: { rock: 0, gold: 0, bio: 0, crystal: 0 } },
+    progress: { developedPercent: 0, score: 0, isCompleted: false },
   };
 
   const updated = await Planet.findOneAndUpdate(
@@ -237,32 +239,26 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
     { dq: -1, dr: 0 }, { dq: -1, dr: 1 }, { dq: 0, dr: 1 },
   ];
 
-  const idsToFetch = new Set([tileId]);
-  for (const tile of placedTiles) {
-    if (EDGE_DIRS.some(d => tile.coord.q === q + d.dq && tile.coord.r === r + d.dr)) {
-      idsToFetch.add(tile.tileId);
-    }
-  }
+  // Fetch ALL placed tile templates (needed for cluster analysis)
+  const allTileIds = new Set([tileId]);
+  for (const tile of placedTiles) allTileIds.add(tile.tileId);
 
-  const rawTemplates = await HexTile.find({ _id: { $in: [...idsToFetch] } }, { edges: 1, center: 1 }).lean();
+  const rawTemplates = await HexTile.find({ _id: { $in: [...allTileIds] } }, { edges: 1, center: 1 }).lean();
   const templateMap = new Map(rawTemplates.map(t => [String(t._id), t]));
 
+  // Build coord→index map for fast lookup
+  const coordMap = new Map();
+  newPlacedTiles.forEach((tile, idx) => {
+    coordMap.set(`${tile.coord.q},${tile.coord.r}`, idx);
+  });
+
   const newTemplate = templateMap.get(tileId);
+  const faceIdx = d => (d + 2) % 6;
   let newConnections = 0;
   const scoredConnections = [];
 
-  // Track connections per resource type (carry forward from previous state)
-  const connectionsByResource = {
-    rock:    (state.progress?.connectionsByResource?.rock    ?? 0),
-    gold:    (state.progress?.connectionsByResource?.gold    ?? 0),
-    bio:     (state.progress?.connectionsByResource?.bio     ?? 0),
-    crystal: (state.progress?.connectionsByResource?.crystal ?? 0),
-  };
-
   if (newTemplate) {
     // Face 2 in the 3D model points East (axial dir 0), so faceIdx(d) = (d+2)%6
-    const faceIdx = d => (d + 2) % 6;
-
     for (let dir = 0; dir < 6; dir++) {
       const { dq, dr } = EDGE_DIRS[dir];
       const neighbor = placedTiles.find(t => t.coord.q === q + dq && t.coord.r === r + dr);
@@ -277,16 +273,85 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
       if (newEdge === neighborEdge) {
         newConnections++;
         scoredConnections.push({ q: neighbor.coord.q, r: neighbor.coord.r });
-        // Track which resource this connection was for
-        if (connectionsByResource[newEdge] !== undefined)
-          connectionsByResource[newEdge]++;
       }
     }
   }
 
-  // Assign face/center visual data to the newly placed tile
+  // Count how many of the scored connections matched the stage's base resource
+  const stageResourceType = stage.meta?.resourceType ?? "";
+  const prevBaseConnections = state.progress?.baseResourceConnections ?? 0;
+  let baseConnectionsGained = 0;
+  if (newTemplate && stageResourceType) {
+    for (let dir = 0; dir < 6; dir++) {
+      const { dq, dr } = EDGE_DIRS[dir];
+      const neighbor = placedTiles.find(t => t.coord.q === q + dq && t.coord.r === r + dr);
+      if (!neighbor) continue;
+      const neighborTemplate = templateMap.get(neighbor.tileId);
+      if (!neighborTemplate) continue;
+      const newEdge = newTemplate.edges[(faceIdx(dir) - rot + 6) % 6];
+      const oppDir = (dir + 3) % 6;
+      const neighborEdge = neighborTemplate.edges[(faceIdx(oppDir) - neighbor.rotation + 6) % 6];
+      if (newEdge === neighborEdge && newEdge === stageResourceType)
+        baseConnectionsGained++;
+    }
+  }
+
+  const totalBaseConnections = prevBaseConnections + baseConnectionsGained;
+  const bonusPoints = Math.floor(totalBaseConnections / 5) - Math.floor(prevBaseConnections / 5);
+
+
+  // Count connections within the cluster reachable from the new tile for a given resource.
+  // Two tiles are cluster-neighbours if they are adjacent AND both touching faces match that resource.
+  // Uses BFS from the new tile, then counts edges inside the visited set.
+  const newTileIndex = newPlacedTiles.length - 1;
+
+  function countClusterConnections(resource) {
+    const n = newPlacedTiles.length;
+    const adj = Array.from({ length: n }, () => []);
+    const edges = [];
+
+    for (let i = 0; i < n; i++) {
+      const tile = newPlacedTiles[i];
+      const tmpl = templateMap.get(tile.tileId);
+      if (!tmpl) continue;
+
+      for (let dir = 0; dir < 6; dir++) {
+        const { dq, dr } = EDGE_DIRS[dir];
+        const j = coordMap.get(`${tile.coord.q + dq},${tile.coord.r + dr}`);
+        if (j === undefined || j <= i) continue;
+
+        const nb = newPlacedTiles[j];
+        const nbTmpl = templateMap.get(nb.tileId);
+        if (!nbTmpl) continue;
+
+        const edgeA = tmpl.edges[(faceIdx(dir) - tile.rotation + 6) % 6];
+        const oppDir = (dir + 3) % 6;
+        const edgeB = nbTmpl.edges[(faceIdx(oppDir) - nb.rotation + 6) % 6];
+
+        if (edgeA === resource && edgeA === edgeB) {
+          adj[i].push(j);
+          adj[j].push(i);
+          edges.push([i, j]);
+        }
+      }
+    }
+
+    // BFS from the new tile to find its cluster
+    const visited = new Set();
+    const stack = [newTileIndex];
+    while (stack.length > 0) {
+      const curr = stack.pop();
+      if (visited.has(curr)) continue;
+      visited.add(curr);
+      for (const next of adj[curr]) stack.push(next);
+    }
+
+    // Count edges whose both endpoints are in the cluster
+    return edges.filter(([a, b]) => visited.has(a) && visited.has(b)).length;
+  }
+
   const levelFor = resource =>
-    Math.min(3, 1 + Math.floor((connectionsByResource[resource] ?? 0) / 5));
+    Math.min(3, 1 + Math.floor(countClusterConnections(resource) / 5));
 
   const tileFaces = newTemplate
     ? newTemplate.edges.map(resource => ({
@@ -310,29 +375,45 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
   };
 
   // Calculate progress
-  const total = newPlacedTiles.length + newDeck.length + newHand.length;
-  const developedPercent = total > 0 ? (newPlacedTiles.length / total) * 100 : 0;
-  const score = (state.progress?.score ?? 0) + newConnections;
+  const score = (state.progress?.score ?? 0) + newConnections + bonusPoints;
   const targetScore = getTargetScore(stageLevel(stage, stageId));
   const isCompleted = score >= targetScore;
+  const developedPercent = Math.min(100, Math.round((score / targetScore) * 100));
 
   const newState = {
     map: { placedTiles: newPlacedTiles },
     hand: { maxHandSize: state.hand?.maxHandSize ?? 3, tilesInHand: newHand },
     deck: { remainingTiles: newDeck },
-    progress: { developedPercent, score, isCompleted, connectionsByResource },
+    progress: { developedPercent, score, isCompleted, baseResourceConnections: totalBaseConnections },
   };
+
+  // Calculate coins awarded on completion
+  const tilesRemaining = newHand.length + newDeck.length;
+  const coinsAwarded = isCompleted
+    ? tilesRemaining >= 6 ? 3 : tilesRemaining >= 3 ? 2 : 1
+    : 0;
 
   const updateFields = {
     "stages.$.state": newState,
     "stages.$.meta.lastPlayedAt": new Date(),
   };
-  if (isCompleted) updateFields["stages.$.meta.isCompleted"] = true;
+  if (isCompleted) {
+    updateFields["stages.$.meta.isCompleted"] = true;
+    updateFields["stages.$.meta.coinsAwarded"] = coinsAwarded;
+  }
 
   await Planet.updateOne(
     { userId, planetId, "stages.stageId": stageId },
     { $set: updateFields }
   );
+
+  // On completion: add coins to planet total and unlock neighboring stages
+  if (isCompleted) {
+    await Planet.updateOne(
+      { userId, planetId },
+      { $inc: { totalCoins: coinsAwarded } }
+    );
+  }
 
   // On completion: unlock neighboring stages in the stage map
   if (isCompleted) {
@@ -372,7 +453,10 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
     hand: newState.hand,
     deck: newState.deck,
     progress: newState.progress,
+    targetScore,
+    coinsAwarded,
     scoredConnections,
+    bonusPoints,
   };
 }
 

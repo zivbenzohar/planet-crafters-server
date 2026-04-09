@@ -29,7 +29,8 @@ router.get("/:planetId/:stageId", auth, async (req, res) => {
       map: state.map,
       hand: state.hand,
       deck: state.deck,
-      progress: state.progress, 
+      progress: state.progress,
+      targetScore: result.targetScore,
     });
   } catch (e) {
     console.error("GET planetState error:", e);

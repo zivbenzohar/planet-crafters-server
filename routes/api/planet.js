@@ -20,7 +20,8 @@ router.get("/active", auth, async (req, res) => {
 
     return res.json({
       planetId: planet.planetId,
-      stages: planet.stages, 
+      stages: planet.stages,
+      totalCoins: planet.totalCoins ?? 0,
     });
   } catch (e) {
     console.error("GET ACTIVE PLANET ERROR:", e);
