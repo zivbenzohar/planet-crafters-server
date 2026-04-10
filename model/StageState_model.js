@@ -74,12 +74,7 @@ const StageStateSchema = new mongoose.Schema(
       developedPercent: { type: Number, default: 0, min: 0, max: 100 },
       score: { type: Number, default: 0 },
       isCompleted: { type: Boolean, default: false },
-      connectionsByResource: {
-        rock:    { type: Number, default: 0 },
-        gold:    { type: Number, default: 0 },
-        bio:     { type: Number, default: 0 },
-        crystal: { type: Number, default: 0 },
-      },
+      baseResourceConnections: { type: Number, default: 0 },
     },
   },
   { _id: false }
