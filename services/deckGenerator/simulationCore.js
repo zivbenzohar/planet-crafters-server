@@ -95,7 +95,7 @@ function countConnections(board, q, r, tile, rotation) {
  * Merges multiple clusters of the same resource before computing.
  *
  * @param {Map}      board
- * @param {object}   dsus     { rock: DSU, gold: DSU, bio: DSU, crystal: DSU }
+ * @param {object}   dsus     { rock: DSU, water: DSU, bio: DSU, lava: DSU }
  * @param {number}   q
  * @param {number}   r
  * @param {object}   tile
@@ -173,10 +173,10 @@ function updateDSUs(board, dsus, q, r, tile, rotation) {
 function _runGreedy(deckTiles, onMove) {
   const board = new Map();
   const dsus = {
-    rock:    new DSU(),
-    gold:    new DSU(),
-    bio:     new DSU(),
-    crystal: new DSU(),
+    rock:  new DSU(),
+    water: new DSU(),
+    bio:   new DSU(),
+    lava:  new DSU(),
   };
   let score = 0;
 

@@ -5,50 +5,100 @@ const HexTileTemplate = require("../model/HexTile_model");
 
 const tiles = [
   // =========================
-  // 4–2 (12)
+  // Category 1 — Mono (W1): 4 tiles
   // =========================
-  { "type": "moreRockGold", "center": "rock", "edges": ["rock","rock","rock","rock","gold","gold"], "level": 1 },
-  { "type": "moreRockBio", "center": "rock", "edges": ["rock","rock","rock","rock","bio","bio"], "level": 1 },
-  { "type": "moreRockCrystal", "center": "rock", "edges": ["rock","rock","rock","rock","crystal","crystal"], "level": 1 },
-
-  { "type": "moreGoldRock", "center": "gold", "edges": ["gold","gold","gold","gold","rock","rock"], "level": 1 },
-  { "type": "moreGoldBio", "center": "gold", "edges": ["gold","gold","gold","gold","bio","bio"], "level": 1 },
-  { "type": "moreGoldCrystal", "center": "gold", "edges": ["gold","gold","gold","gold","crystal","crystal"], "level": 1 },
-
-  { "type": "moreBioRock", "center": "bio", "edges": ["bio","bio","bio","bio","rock","rock"], "level": 1 },
-  { "type": "moreBioGold", "center": "bio", "edges": ["bio","bio","bio","bio","gold","gold"], "level": 1 },
-  { "type": "moreBioCrystal", "center": "bio", "edges": ["bio","bio","bio","bio","crystal","crystal"], "level": 1 },
-
-  { "type": "moreCrystalRock", "center": "crystal", "edges": ["crystal","crystal","crystal","crystal","rock","rock"], "level": 1 },
-  { "type": "moreCrystalGold", "center": "crystal", "edges": ["crystal","crystal","crystal","crystal","gold","gold"], "level": 1 },
-  { "type": "moreCrystalBio", "center": "crystal", "edges": ["crystal","crystal","crystal","crystal","bio","bio"], "level": 1 },
+  { "type": "allRock",  "center": "rock",  "edges": ["rock","rock","rock","rock","rock","rock"],   "level": 1 },
+  { "type": "allWater", "center": "water", "edges": ["water","water","water","water","water","water"], "level": 1 },
+  { "type": "allBio",   "center": "bio",   "edges": ["bio","bio","bio","bio","bio","bio"],           "level": 1 },
+  { "type": "allLava",  "center": "lava",  "edges": ["lava","lava","lava","lava","lava","lava"],     "level": 1 },
 
   // =========================
-  // 3–3 (6)
+  // Category 2 — Bi 4+2 Contiguous [A,A,A,A,B,B] (W2): 12 tiles
   // =========================
-  { "type": "halfRockGold", "center": "rock", "edges": ["rock","rock","rock","gold","gold","gold"], "level": 1 },
-  { "type": "halfRockBio", "center": "rock", "edges": ["rock","rock","rock","bio","bio","bio"], "level": 1 },
-  { "type": "halfRockCrystal", "center": "rock", "edges": ["rock","rock","rock","crystal","crystal","crystal"], "level": 1 },
-
-  { "type": "halfGoldBio", "center": "gold", "edges": ["gold","gold","gold","bio","bio","bio"], "level": 1 },
-  { "type": "halfGoldCrystal", "center": "gold", "edges": ["gold","gold","gold","crystal","crystal","crystal"], "level": 1 },
-  { "type": "halfBioCrystal", "center": "bio", "edges": ["bio","bio","bio","crystal","crystal","crystal"], "level": 1 },
-
-  // =========================
-  // 2–2–2 (4)
-  // =========================
-  { "type": "tripleRockGoldBio", "center": "rock", "edges": ["rock","rock","gold","gold","bio","bio"], "level": 1 },
-  { "type": "tripleRockGoldCrystal", "center": "rock", "edges": ["rock","rock","gold","gold","crystal","crystal"], "level": 1 },
-  { "type": "tripleRockBioCrystal", "center": "rock", "edges": ["rock","rock","bio","bio","crystal","crystal"], "level": 1 },
-  { "type": "tripleGoldBioCrystal", "center": "gold", "edges": ["gold","gold","bio","bio","crystal","crystal"], "level": 1 },
+  { "type": "moreRockWater",  "center": "rock",  "edges": ["rock","rock","rock","rock","water","water"], "level": 1 },
+  { "type": "moreRockBio",    "center": "rock",  "edges": ["rock","rock","rock","rock","bio","bio"],     "level": 1 },
+  { "type": "moreRockLava",   "center": "rock",  "edges": ["rock","rock","rock","rock","lava","lava"],   "level": 1 },
+  { "type": "moreWaterRock",  "center": "water", "edges": ["water","water","water","water","rock","rock"], "level": 1 },
+  { "type": "moreWaterBio",   "center": "water", "edges": ["water","water","water","water","bio","bio"],   "level": 1 },
+  { "type": "moreWaterLava",  "center": "water", "edges": ["water","water","water","water","lava","lava"], "level": 1 },
+  { "type": "moreBioRock",    "center": "bio",   "edges": ["bio","bio","bio","bio","rock","rock"],   "level": 1 },
+  { "type": "moreBioWater",   "center": "bio",   "edges": ["bio","bio","bio","bio","water","water"], "level": 1 },
+  { "type": "moreBioLava",    "center": "bio",   "edges": ["bio","bio","bio","bio","lava","lava"],   "level": 1 },
+  { "type": "moreLavaRock",   "center": "lava",  "edges": ["lava","lava","lava","lava","rock","rock"],   "level": 1 },
+  { "type": "moreLavaWater",  "center": "lava",  "edges": ["lava","lava","lava","lava","water","water"], "level": 1 },
+  { "type": "moreLavaBio",    "center": "lava",  "edges": ["lava","lava","lava","lava","bio","bio"],     "level": 1 },
 
   // =========================
-  // all (4)
+  // Category 3 — Bi 4+2 Non-Contiguous Pattern A [A,A,A,B,A,B] (W3): 12 tiles
   // =========================
-  { "type": "allRock", "center": "rock", "edges": ["rock","rock","rock","rock","rock","rock"], "level": 1 },
-  { "type": "allGold", "center": "gold", "edges": ["gold","gold","gold","gold","gold","gold"], "level": 1 },
-  { "type": "allBio", "center": "bio", "edges": ["bio","bio","bio","bio","bio","bio"], "level": 1 },
-  { "type": "allCrystal", "center": "crystal", "edges": ["crystal","crystal","crystal","crystal","crystal","crystal"], "level": 1 }
+  { "type": "altA_moreRockWater",  "center": "rock",  "edges": ["rock","rock","rock","water","rock","water"],   "level": 1 },
+  { "type": "altA_moreRockBio",    "center": "rock",  "edges": ["rock","rock","rock","bio","rock","bio"],       "level": 1 },
+  { "type": "altA_moreRockLava",   "center": "rock",  "edges": ["rock","rock","rock","lava","rock","lava"],     "level": 1 },
+  { "type": "altA_moreWaterRock",  "center": "water", "edges": ["water","water","water","rock","water","rock"],   "level": 1 },
+  { "type": "altA_moreWaterBio",   "center": "water", "edges": ["water","water","water","bio","water","bio"],     "level": 1 },
+  { "type": "altA_moreWaterLava",  "center": "water", "edges": ["water","water","water","lava","water","lava"],   "level": 1 },
+  { "type": "altA_moreBioRock",    "center": "bio",   "edges": ["bio","bio","bio","rock","bio","rock"],   "level": 1 },
+  { "type": "altA_moreBioWater",   "center": "bio",   "edges": ["bio","bio","bio","water","bio","water"], "level": 1 },
+  { "type": "altA_moreBioLava",    "center": "bio",   "edges": ["bio","bio","bio","lava","bio","lava"],   "level": 1 },
+  { "type": "altA_moreLavaRock",   "center": "lava",  "edges": ["lava","lava","lava","rock","lava","rock"],   "level": 1 },
+  { "type": "altA_moreLavaWater",  "center": "lava",  "edges": ["lava","lava","lava","water","lava","water"], "level": 1 },
+  { "type": "altA_moreLavaBio",    "center": "lava",  "edges": ["lava","lava","lava","bio","lava","bio"],     "level": 1 },
+
+  // =========================
+  // Category 4 — Bi 4+2 Non-Contiguous Pattern B [A,A,B,A,A,B] (W3): 12 tiles
+  // =========================
+  { "type": "altB_moreRockWater",  "center": "rock",  "edges": ["rock","rock","water","rock","rock","water"],   "level": 1 },
+  { "type": "altB_moreRockBio",    "center": "rock",  "edges": ["rock","rock","bio","rock","rock","bio"],       "level": 1 },
+  { "type": "altB_moreRockLava",   "center": "rock",  "edges": ["rock","rock","lava","rock","rock","lava"],     "level": 1 },
+  { "type": "altB_moreWaterRock",  "center": "water", "edges": ["water","water","rock","water","water","rock"],   "level": 1 },
+  { "type": "altB_moreWaterBio",   "center": "water", "edges": ["water","water","bio","water","water","bio"],     "level": 1 },
+  { "type": "altB_moreWaterLava",  "center": "water", "edges": ["water","water","lava","water","water","lava"],   "level": 1 },
+  { "type": "altB_moreBioRock",    "center": "bio",   "edges": ["bio","bio","rock","bio","bio","rock"],   "level": 1 },
+  { "type": "altB_moreBioWater",   "center": "bio",   "edges": ["bio","bio","water","bio","bio","water"], "level": 1 },
+  { "type": "altB_moreBioLava",    "center": "bio",   "edges": ["bio","bio","lava","bio","bio","lava"],   "level": 1 },
+  { "type": "altB_moreLavaRock",   "center": "lava",  "edges": ["lava","lava","rock","lava","lava","rock"],   "level": 1 },
+  { "type": "altB_moreLavaWater",  "center": "lava",  "edges": ["lava","lava","water","lava","lava","water"], "level": 1 },
+  { "type": "altB_moreLavaBio",    "center": "lava",  "edges": ["lava","lava","bio","lava","lava","bio"],     "level": 1 },
+
+  // =========================
+  // Category 5 — Bi 3+3 Contiguous [A,A,A,B,B,B] (W2): 6 tiles
+  // =========================
+  { "type": "halfRockWater",  "center": "rock",  "edges": ["rock","rock","rock","water","water","water"], "level": 1 },
+  { "type": "halfRockBio",    "center": "rock",  "edges": ["rock","rock","rock","bio","bio","bio"],       "level": 1 },
+  { "type": "halfRockLava",   "center": "rock",  "edges": ["rock","rock","rock","lava","lava","lava"],    "level": 1 },
+  { "type": "halfWaterBio",   "center": "water", "edges": ["water","water","water","bio","bio","bio"],    "level": 1 },
+  { "type": "halfWaterLava",  "center": "water", "edges": ["water","water","water","lava","lava","lava"], "level": 1 },
+  { "type": "halfBioLava",    "center": "bio",   "edges": ["bio","bio","bio","lava","lava","lava"],       "level": 1 },
+
+  // =========================
+  // Category 6 — Bi 3+3 Non-Contiguous Pattern A [A,A,B,A,B,B] (W3): 6 tiles
+  // =========================
+  { "type": "altA_halfRockWater",  "center": "rock",  "edges": ["rock","rock","water","rock","water","water"],   "level": 1 },
+  { "type": "altA_halfRockBio",    "center": "rock",  "edges": ["rock","rock","bio","rock","bio","bio"],         "level": 1 },
+  { "type": "altA_halfRockLava",   "center": "rock",  "edges": ["rock","rock","lava","rock","lava","lava"],      "level": 1 },
+  { "type": "altA_halfWaterBio",   "center": "water", "edges": ["water","water","bio","water","bio","bio"],      "level": 1 },
+  { "type": "altA_halfWaterLava",  "center": "water", "edges": ["water","water","lava","water","lava","lava"],   "level": 1 },
+  { "type": "altA_halfBioLava",    "center": "bio",   "edges": ["bio","bio","lava","bio","lava","lava"],         "level": 1 },
+
+  // =========================
+  // Category 7 — Bi 3+3 Non-Contiguous Pattern B [A,A,B,B,A,B] (W3): 6 tiles
+  // =========================
+  { "type": "altB_halfRockWater",  "center": "rock",  "edges": ["rock","rock","water","water","rock","water"],   "level": 1 },
+  { "type": "altB_halfRockBio",    "center": "rock",  "edges": ["rock","rock","bio","bio","rock","bio"],         "level": 1 },
+  { "type": "altB_halfRockLava",   "center": "rock",  "edges": ["rock","rock","lava","lava","rock","lava"],      "level": 1 },
+  { "type": "altB_halfWaterBio",   "center": "water", "edges": ["water","water","bio","bio","water","bio"],      "level": 1 },
+  { "type": "altB_halfWaterLava",  "center": "water", "edges": ["water","water","lava","lava","water","lava"],   "level": 1 },
+  { "type": "altB_halfBioLava",    "center": "bio",   "edges": ["bio","bio","lava","lava","bio","lava"],         "level": 1 },
+
+  // =========================
+  // Category 8 — Bi 3+3 Non-Contiguous Pattern C [A,B,A,B,A,B] (W3): 6 tiles
+  // =========================
+  { "type": "altC_halfRockWater",  "center": "rock",  "edges": ["rock","water","rock","water","rock","water"],   "level": 1 },
+  { "type": "altC_halfRockBio",    "center": "rock",  "edges": ["rock","bio","rock","bio","rock","bio"],         "level": 1 },
+  { "type": "altC_halfRockLava",   "center": "rock",  "edges": ["rock","lava","rock","lava","rock","lava"],      "level": 1 },
+  { "type": "altC_halfWaterBio",   "center": "water", "edges": ["water","bio","water","bio","water","bio"],      "level": 1 },
+  { "type": "altC_halfWaterLava",  "center": "water", "edges": ["water","lava","water","lava","water","lava"],   "level": 1 },
+  { "type": "altC_halfBioLava",    "center": "bio",   "edges": ["bio","lava","bio","lava","bio","lava"],         "level": 1 },
 ]
 
 

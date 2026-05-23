@@ -13,13 +13,13 @@ const HexTileSchema = new mongoose.Schema(
     center: {
       type: String,
       required: true,
-      // Resource type in the center: "rock", "gold", "bio", "crystal"
+      // Resource type in the center: "rock", "water", "bio", "lava"
     },
 
     edges: {
       type: [String],
       required: true,
-      // Array of 6 strings in fixed direction order: ["gold","gold","rock","rock","rock","rock"]
+      // Array of 6 strings in fixed direction order: ["water","water","rock","rock","rock","rock"]
       // Later: use rotation to know which edge is in which actual direction.
       validate: {
         validator: function (arr) {

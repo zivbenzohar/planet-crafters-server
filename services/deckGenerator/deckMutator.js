@@ -6,71 +6,55 @@ const { getTileWeight } = require('./tileUtils');
  * Replace one tile in `deck` to nudge difficulty in the requested direction.
  *
  * SR landscape insight (shuffle-simulation model):
- *   - W=2 tiles (4+2 same-resource split): moderate SR, versatile placements.
- *   - W=5 tiles (2+2+2 three-resource):    individually hard to match; in small
- *     quantities they *mix badly* with W=2 and drop SR sharply.  In large
- *     quantities (pure-W=5 deck) the greedy agent finds symmetric matches and
- *     SR rises again — an unexpected valley at ~20-30 % W=5 content.
- *   - W=1 MIXED mono tiles:                SR → 0 % (different resources never
- *     match each other under shuffle).  DO NOT use for 'ease'.
- *   - W=1 SAME-resource mono tiles:        trivially easy (SR ≈ 100 %).
+ *   - W=2 tiles (contiguous bi-resource: 4+2 or 3+3 in one arc): moderate SR,
+ *     versatile placements — the dominant resource forms a concentrated arc that
+ *     neighbours can match easily from multiple angles regardless of draw order.
+ *   - W=3 tiles (non-contiguous bi-resource: split/alternating patterns): harder
+ *     to match because the minority resource interrupts the arc, so placements
+ *     that satisfy all touching edges require specific draw-order alignment.
+ *   - W=1 MIXED mono tiles: SR → 0 % (different mono resources never match each
+ *     other).  NEVER use for 'ease'.
  *
  * Safe mutations:
  *   'harden' (SR too high → need harder deck):
- *     Replace a W=2 tile with a W=5 tile.  Adding even a few W=5 tiles to a
- *     W=2 deck drives SR down sharply into the mid-range windows.
+ *     Replace a W=2 tile with a W=3 tile.  Non-contiguous patterns break the
+ *     arc matching that makes W=2 decks easy, pushing SR down.
  *   'ease' (SR too low → need easier deck):
- *     Replace a W=5 tile with a W=2 tile.  W=2 tiles are more forgiving than
- *     W=5 (dominant resource matches many neighbours regardless of draw order).
- *     Never replace with W=1 mono — mixed-resource mono decks are very hard.
+ *     Replace a W=3 tile with a W=2 tile.  Contiguous patterns restore the
+ *     dominant-arc advantage.  Never replace with W=1 mono.
  *
  * Returns a new array (deck is never mutated in-place).
  *
  * @param {object[]} deck       Current deck (tile objects with _id + edges)
  * @param {'harden'|'ease'} direction
- * @param {object[]} tilePool   Full tile catalog (26 templates)
+ * @param {object[]} tilePool   Full tile catalog (64 templates)
  * @returns {object[]}          New deck of the same length
  */
 function mutateDeck(deck, direction, tilePool) {
   const newDeck = deck.slice(); // shallow copy
 
   if (direction === 'harden') {
-    // Swap OUT one W=2 tile (or W=3 as fallback) and swap IN one W=5.
-    // Increasing W=5 content adds resource diversity that is hard to match
-    // across random draw orders.
+    // Swap OUT one W=2 tile (contiguous) and swap IN one W=3 tile (non-contiguous).
     const targets = newDeck
       .map((t, i) => ({ t, i }))
       .filter(({ t }) => getTileWeight(t) <= 2);
 
-    if (targets.length === 0) {
-      // Fall back: W=3 → W=5
-      const w3 = newDeck.map((t, i) => ({ t, i })).filter(({ t }) => getTileWeight(t) === 3);
-      if (w3.length === 0) return newDeck;
-      targets.push(...w3);
-    }
+    if (targets.length === 0) return newDeck;
 
-    const heavyPool = tilePool.filter(t => getTileWeight(t) === 5);
-    if (heavyPool.length === 0) return newDeck;
+    const hardPool = tilePool.filter(t => getTileWeight(t) === 3);
+    if (hardPool.length === 0) return newDeck;
 
     const { i } = targets[Math.floor(Math.random() * targets.length)];
-    newDeck[i] = heavyPool[Math.floor(Math.random() * heavyPool.length)];
+    newDeck[i] = hardPool[Math.floor(Math.random() * hardPool.length)];
 
   } else { // 'ease'
-    // Swap OUT one W=5 tile (or W=3 as fallback) and swap IN one W=2 tile.
-    // W=2 tiles (4+2 same-resource) are more likely to match neighbours across
-    // draw orders than W=5 tiles.  NEVER swap in W=1 mono — a mixed-resource
-    // mono deck drives SR to near 0 % (mono tiles only match tiles of the
-    // same mono type, so resource diversity makes placements impossible).
+    // Swap OUT one W=3 tile (non-contiguous) and swap IN one W=2 tile (contiguous).
+    // Never swap in W=1 mono — a mixed-resource mono deck drives SR to near 0 %.
     const targets = newDeck
       .map((t, i) => ({ t, i }))
-      .filter(({ t }) => getTileWeight(t) >= 5);
+      .filter(({ t }) => getTileWeight(t) >= 3);
 
-    if (targets.length === 0) {
-      // Fall back: W=3 → W=2
-      const w3 = newDeck.map((t, i) => ({ t, i })).filter(({ t }) => getTileWeight(t) === 3);
-      if (w3.length === 0) return newDeck;
-      targets.push(...w3);
-    }
+    if (targets.length === 0) return newDeck;
 
     const easyPool = tilePool.filter(t => getTileWeight(t) === 2);
     if (easyPool.length === 0) return newDeck;

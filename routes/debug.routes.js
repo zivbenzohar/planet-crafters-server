@@ -86,7 +86,7 @@ router.get('/deck', async (req, res) => {
     const { deck, simulatedSR, convergedInIterations } =
       await buildDeckWithMeta({ level, targetScore, tiles });
 
-    const deckSummary = { W1: 0, W2: 0, W3: 0, W5: 0 };
+    const deckSummary = { W1: 0, W2: 0, W3: 0 };
     const deckDetails = deck.map((tile, index) => {
       const w = getTileWeight(tile);
       deckSummary[`W${w}`] = (deckSummary[`W${w}`] || 0) + 1;
