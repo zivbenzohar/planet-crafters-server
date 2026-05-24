@@ -243,7 +243,7 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
   const allTileIds = new Set([tileId]);
   for (const tile of placedTiles) allTileIds.add(tile.tileId);
 
-  const rawTemplates = await HexTile.find({ _id: { $in: [...allTileIds] } }, { edges: 1, center: 1 }).lean();
+  const rawTemplates = await HexTile.find({ _id: { $in: [...allTileIds] } }, { edges: 1 }).lean();
   const templateMap = new Map(rawTemplates.map(t => [String(t._id), t]));
 
   // Build coord→index map for fast lookup
@@ -252,13 +252,22 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
     coordMap.set(`${tile.coord.q},${tile.coord.r}`, idx);
   });
 
+  const DIR_NAMES = ["upper-right","lower-right","bottom","lower-left","upper-left","top"];
+
   const newTemplate = templateMap.get(tileId);
-  const faceIdx = d => (d + 2) % 6;
   let newConnections = 0;
   const scoredConnections = [];
 
+  console.log(`\n📍 PLACE: tileId=${tileId} coord=(${q},${r}) rot=${rot}`);
   if (newTemplate) {
-    // Face 2 in the 3D model points East (axial dir 0), so faceIdx(d) = (d+2)%6
+    console.log(`   edges=${JSON.stringify(newTemplate.edges)}`);
+    const dirMap = Array.from({length:6}, (_,dir) =>
+      `${DIR_NAMES[dir]}=${newTemplate.edges[(dir - rot + 7) % 6]}`
+    );
+    console.log(`   visual layout: ${dirMap.join(' | ')}`);
+  }
+
+  if (newTemplate) {
     for (let dir = 0; dir < 6; dir++) {
       const { dq, dr } = EDGE_DIRS[dir];
       const neighbor = placedTiles.find(t => t.coord.q === q + dq && t.coord.r === r + dr);
@@ -266,16 +275,20 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
       const neighborTemplate = templateMap.get(neighbor.tileId);
       if (!neighborTemplate) continue;
 
-      const newEdge = newTemplate.edges[(faceIdx(dir) - rot + 6) % 6];
+      const newEdge = newTemplate.edges[(dir - rot + 7) % 6];
       const oppDir = (dir + 3) % 6;
-      const neighborEdge = neighborTemplate.edges[(faceIdx(oppDir) - neighbor.rotation + 6) % 6];
+      const neighborEdge = neighborTemplate.edges[(oppDir - neighbor.rotation + 7) % 6];
 
-      if (newEdge === neighborEdge) {
+      const match = newEdge === neighborEdge;
+      console.log(`   ${DIR_NAMES[dir]}(dir${dir}): mine=${newEdge} vs neighbor(${neighbor.coord.q},${neighbor.coord.r})=${neighborEdge} → ${match ? '✅ MATCH' : '❌ no match'}`);
+
+      if (match) {
         newConnections++;
         scoredConnections.push({ q: neighbor.coord.q, r: neighbor.coord.r });
       }
     }
   }
+  console.log(`   🏆 connections: ${newConnections}`);
 
   // Count how many of the scored connections matched the stage's base resource
   const stageResourceType = stage.meta?.resourceType ?? "";
@@ -288,9 +301,9 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
       if (!neighbor) continue;
       const neighborTemplate = templateMap.get(neighbor.tileId);
       if (!neighborTemplate) continue;
-      const newEdge = newTemplate.edges[(faceIdx(dir) - rot + 6) % 6];
+      const newEdge = newTemplate.edges[(dir - rot + 7) % 6];
       const oppDir = (dir + 3) % 6;
-      const neighborEdge = neighborTemplate.edges[(faceIdx(oppDir) - neighbor.rotation + 6) % 6];
+      const neighborEdge = neighborTemplate.edges[(oppDir - neighbor.rotation + 7) % 6];
       if (newEdge === neighborEdge && newEdge === stageResourceType)
         baseConnectionsGained++;
     }
@@ -324,9 +337,9 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
         const nbTmpl = templateMap.get(nb.tileId);
         if (!nbTmpl) continue;
 
-        const edgeA = tmpl.edges[(faceIdx(dir) - tile.rotation + 6) % 6];
+        const edgeA = tmpl.edges[(dir - tile.rotation + 7) % 6];
         const oppDir = (dir + 3) % 6;
-        const edgeB = nbTmpl.edges[(faceIdx(oppDir) - nb.rotation + 6) % 6];
+        const edgeB = nbTmpl.edges[(oppDir - nb.rotation + 7) % 6];
 
         if (edgeA === resource && edgeA === edgeB) {
           adj[i].push(j);
@@ -353,25 +366,20 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
   const levelFor = resource =>
     Math.min(3, 1 + Math.floor(countClusterConnections(resource) / 5));
 
+  // faces[i] = the resource at model Face0i. The material on face i is always edges[i]
+  // regardless of rotation (the whole tile rotates, face materials stay attached).
   const tileFaces = newTemplate
-    ? newTemplate.edges.map(resource => ({
+    ? newTemplate.edges.map((resource, i) => ({
         resource,
         variant: Math.random() < 0.5 ? 1 : 2,
         level: levelFor(resource),
       }))
     : [];
 
-  const tileCenterResource = newTemplate?.center ?? "";
-  const tileCenter = {
-    resource: tileCenterResource,
-    level: levelFor(tileCenterResource),
-  };
-
-  // Store face/center data on the placed tile record
+  // Store face data on the placed tile record
   newPlacedTiles[newPlacedTiles.length - 1] = {
     tileId, coord: { q, r }, rotation: rot,
     faces: tileFaces,
-    center: tileCenter,
   };
 
   // Calculate progress

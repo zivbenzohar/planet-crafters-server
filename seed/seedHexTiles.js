@@ -3,75 +3,107 @@ const mongoose = require("mongoose");
 
 const HexTileTemplate = require("../model/HexTile_model");
 
+const R = "rock", C = "crystal", B = "bio", T = "terra";
+
 const tiles = [
-  // =========================
-  // 4–2 (12)
-  // =========================
-  { "type": "moreRockGold", "center": "rock", "edges": ["rock","rock","rock","rock","gold","gold"], "level": 1 },
-  { "type": "moreRockBio", "center": "rock", "edges": ["rock","rock","rock","rock","bio","bio"], "level": 1 },
-  { "type": "moreRockCrystal", "center": "rock", "edges": ["rock","rock","rock","rock","crystal","crystal"], "level": 1 },
+  // ========================= Category 1 — Mono (4) — Level 1 =========================
+  { type: "allRock",    edges: [R,R,R,R,R,R], level: 1 },
+  { type: "allCrystal", edges: [C,C,C,C,C,C], level: 1 },
+  { type: "allBio",     edges: [B,B,B,B,B,B], level: 1 },
+  { type: "allTerra",   edges: [T,T,T,T,T,T], level: 1 },
 
-  { "type": "moreGoldRock", "center": "gold", "edges": ["gold","gold","gold","gold","rock","rock"], "level": 1 },
-  { "type": "moreGoldBio", "center": "gold", "edges": ["gold","gold","gold","gold","bio","bio"], "level": 1 },
-  { "type": "moreGoldCrystal", "center": "gold", "edges": ["gold","gold","gold","gold","crystal","crystal"], "level": 1 },
+  // ========================= Category 2 — 4+2 Contiguous (AAAABB) (12) — Level 1 =========================
+  { type: "moreRockCrystal",  edges: [R,R,R,R,C,C], level: 1 },
+  { type: "moreRockBio",      edges: [R,R,R,R,B,B], level: 1 },
+  { type: "moreRockTerra",    edges: [R,R,R,R,T,T], level: 1 },
+  { type: "moreCrystalRock",  edges: [C,C,C,C,R,R], level: 1 },
+  { type: "moreCrystalBio",   edges: [C,C,C,C,B,B], level: 1 },
+  { type: "moreCrystalTerra", edges: [C,C,C,C,T,T], level: 1 },
+  { type: "moreBioRock",      edges: [B,B,B,B,R,R], level: 1 },
+  { type: "moreBioCrystal",   edges: [B,B,B,B,C,C], level: 1 },
+  { type: "moreBioTerra",     edges: [B,B,B,B,T,T], level: 1 },
+  { type: "moreTerraRock",    edges: [T,T,T,T,R,R], level: 1 },
+  { type: "moreTerraCrystal", edges: [T,T,T,T,C,C], level: 1 },
+  { type: "moreTerraBio",     edges: [T,T,T,T,B,B], level: 1 },
 
-  { "type": "moreBioRock", "center": "bio", "edges": ["bio","bio","bio","bio","rock","rock"], "level": 1 },
-  { "type": "moreBioGold", "center": "bio", "edges": ["bio","bio","bio","bio","gold","gold"], "level": 1 },
-  { "type": "moreBioCrystal", "center": "bio", "edges": ["bio","bio","bio","bio","crystal","crystal"], "level": 1 },
+  // ========================= Category 3 — 4+2 Non-Contiguous A (AAABAB) (12) — Level 2 =========================
+  { type: "altA_moreRockCrystal",  edges: [R,R,R,C,R,C], level: 2 },
+  { type: "altA_moreRockBio",      edges: [R,R,R,B,R,B], level: 2 },
+  { type: "altA_moreRockTerra",    edges: [R,R,R,T,R,T], level: 2 },
+  { type: "altA_moreCrystalRock",  edges: [C,C,C,R,C,R], level: 2 },
+  { type: "altA_moreCrystalBio",   edges: [C,C,C,B,C,B], level: 2 },
+  { type: "altA_moreCrystalTerra", edges: [C,C,C,T,C,T], level: 2 },
+  { type: "altA_moreBioRock",      edges: [B,B,B,R,B,R], level: 2 },
+  { type: "altA_moreBioCrystal",   edges: [B,B,B,C,B,C], level: 2 },
+  { type: "altA_moreBioTerra",     edges: [B,B,B,T,B,T], level: 2 },
+  { type: "altA_moreTerraRock",    edges: [T,T,T,R,T,R], level: 2 },
+  { type: "altA_moreTerraCrystal", edges: [T,T,T,C,T,C], level: 2 },
+  { type: "altA_moreTerraBio",     edges: [T,T,T,B,T,B], level: 2 },
 
-  { "type": "moreCrystalRock", "center": "crystal", "edges": ["crystal","crystal","crystal","crystal","rock","rock"], "level": 1 },
-  { "type": "moreCrystalGold", "center": "crystal", "edges": ["crystal","crystal","crystal","crystal","gold","gold"], "level": 1 },
-  { "type": "moreCrystalBio", "center": "crystal", "edges": ["crystal","crystal","crystal","crystal","bio","bio"], "level": 1 },
+  // ========================= Category 4 — 4+2 Non-Contiguous B (AABAAB) (12) — Level 2 =========================
+  { type: "altB_moreRockCrystal",  edges: [R,R,C,R,R,C], level: 2 },
+  { type: "altB_moreRockBio",      edges: [R,R,B,R,R,B], level: 2 },
+  { type: "altB_moreRockTerra",    edges: [R,R,T,R,R,T], level: 2 },
+  { type: "altB_moreCrystalRock",  edges: [C,C,R,C,C,R], level: 2 },
+  { type: "altB_moreCrystalBio",   edges: [C,C,B,C,C,B], level: 2 },
+  { type: "altB_moreCrystalTerra", edges: [C,C,T,C,C,T], level: 2 },
+  { type: "altB_moreBioRock",      edges: [B,B,R,B,B,R], level: 2 },
+  { type: "altB_moreBioCrystal",   edges: [B,B,C,B,B,C], level: 2 },
+  { type: "altB_moreBioTerra",     edges: [B,B,T,B,B,T], level: 2 },
+  { type: "altB_moreTerraRock",    edges: [T,T,R,T,T,R], level: 2 },
+  { type: "altB_moreTerraCrystal", edges: [T,T,C,T,T,C], level: 2 },
+  { type: "altB_moreTerraBio",     edges: [T,T,B,T,T,B], level: 2 },
 
-  // =========================
-  // 3–3 (6)
-  // =========================
-  { "type": "halfRockGold", "center": "rock", "edges": ["rock","rock","rock","gold","gold","gold"], "level": 1 },
-  { "type": "halfRockBio", "center": "rock", "edges": ["rock","rock","rock","bio","bio","bio"], "level": 1 },
-  { "type": "halfRockCrystal", "center": "rock", "edges": ["rock","rock","rock","crystal","crystal","crystal"], "level": 1 },
+  // ========================= Category 5 — 3+3 Contiguous (AAABBB) (6) — Level 2 =========================
+  { type: "halfRockCrystal",  edges: [R,R,R,C,C,C], level: 2 },
+  { type: "halfRockBio",      edges: [R,R,R,B,B,B], level: 2 },
+  { type: "halfRockTerra",    edges: [R,R,R,T,T,T], level: 2 },
+  { type: "halfCrystalBio",   edges: [C,C,C,B,B,B], level: 2 },
+  { type: "halfCrystalTerra", edges: [C,C,C,T,T,T], level: 2 },
+  { type: "halfBioTerra",     edges: [B,B,B,T,T,T], level: 2 },
 
-  { "type": "halfGoldBio", "center": "gold", "edges": ["gold","gold","gold","bio","bio","bio"], "level": 1 },
-  { "type": "halfGoldCrystal", "center": "gold", "edges": ["gold","gold","gold","crystal","crystal","crystal"], "level": 1 },
-  { "type": "halfBioCrystal", "center": "bio", "edges": ["bio","bio","bio","crystal","crystal","crystal"], "level": 1 },
+  // ========================= Category 6 — 3+3 Non-Contiguous A (AABABB) (6) — Level 2 =========================
+  { type: "altA_halfRockCrystal",  edges: [R,R,C,R,C,C], level: 3 },
+  { type: "altA_halfRockBio",      edges: [R,R,B,R,B,B], level: 3 },
+  { type: "altA_halfRockTerra",    edges: [R,R,T,R,T,T], level: 3 },
+  { type: "altA_halfCrystalBio",   edges: [C,C,B,C,B,B], level: 3 },
+  { type: "altA_halfCrystalTerra", edges: [C,C,T,C,T,T], level: 3 },
+  { type: "altA_halfBioTerra",     edges: [B,B,T,B,T,T], level: 3 },
 
-  // =========================
-  // 2–2–2 (4)
-  // =========================
-  { "type": "tripleRockGoldBio", "center": "rock", "edges": ["rock","rock","gold","gold","bio","bio"], "level": 1 },
-  { "type": "tripleRockGoldCrystal", "center": "rock", "edges": ["rock","rock","gold","gold","crystal","crystal"], "level": 1 },
-  { "type": "tripleRockBioCrystal", "center": "rock", "edges": ["rock","rock","bio","bio","crystal","crystal"], "level": 1 },
-  { "type": "tripleGoldBioCrystal", "center": "gold", "edges": ["gold","gold","bio","bio","crystal","crystal"], "level": 1 },
+  // ========================= Category 7 — 3+3 Non-Contiguous B (AABBAB) (6) — Level 2 =========================
+  { type: "altB_halfRockCrystal",  edges: [R,R,C,C,R,C], level: 3 },
+  { type: "altB_halfRockBio",      edges: [R,R,B,B,R,B], level: 3 },
+  { type: "altB_halfRockTerra",    edges: [R,R,T,T,R,T], level: 3 },
+  { type: "altB_halfCrystalBio",   edges: [C,C,B,B,C,B], level: 3 },
+  { type: "altB_halfCrystalTerra", edges: [C,C,T,T,C,T], level: 3 },
+  { type: "altB_halfBioTerra",     edges: [B,B,T,T,B,T], level: 3 },
 
-  // =========================
-  // all (4)
-  // =========================
-  { "type": "allRock", "center": "rock", "edges": ["rock","rock","rock","rock","rock","rock"], "level": 1 },
-  { "type": "allGold", "center": "gold", "edges": ["gold","gold","gold","gold","gold","gold"], "level": 1 },
-  { "type": "allBio", "center": "bio", "edges": ["bio","bio","bio","bio","bio","bio"], "level": 1 },
-  { "type": "allCrystal", "center": "crystal", "edges": ["crystal","crystal","crystal","crystal","crystal","crystal"], "level": 1 }
-]
+  // ========================= Category 8 — 3+3 Non-Contiguous C (ABABAB) (6) — Level 3 =========================
+  { type: "altC_halfRockCrystal",  edges: [R,C,R,C,R,C], level: 3 },
+  { type: "altC_halfRockBio",      edges: [R,B,R,B,R,B], level: 3 },
+  { type: "altC_halfRockTerra",    edges: [R,T,R,T,R,T], level: 3 },
+  { type: "altC_halfCrystalBio",   edges: [C,B,C,B,C,B], level: 3 },
+  { type: "altC_halfCrystalTerra", edges: [C,T,C,T,C,T], level: 3 },
+  { type: "altC_halfBioTerra",     edges: [B,T,B,T,B,T], level: 3 },
+];
 
-
-// Basic validation that every tile is valid
 function validateTiles() {
+  if (tiles.length !== 64) throw new Error(`Expected 64 tiles, got ${tiles.length}`);
   for (const t of tiles) {
-    if (!t.type || !t.center || !Array.isArray(t.edges) || t.edges.length !== 6) {
-      throw new Error("Invalid tile in seed list: " + JSON.stringify(t));
+    if (!t.type || !Array.isArray(t.edges) || t.edges.length !== 6) {
+      throw new Error("Invalid tile: " + JSON.stringify(t));
     }
   }
 }
 
 async function main() {
-  if (!process.env.MONGO_URI) {
-    throw new Error("Missing MONGO_URI in .env");
-  }
+  if (!process.env.MONGO_URI) throw new Error("Missing MONGO_URI in .env");
 
   validateTiles();
 
   await mongoose.connect(process.env.MONGO_URI);
   console.log("✅ Connected to MongoDB");
 
-  // Delete only the old catalog and insert new
   const del = await HexTileTemplate.deleteMany({});
   console.log(`🧹 Deleted hexTileTemplate docs: ${del.deletedCount}`);
 
