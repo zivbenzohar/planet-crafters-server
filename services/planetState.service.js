@@ -234,6 +234,7 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
   // Count new correct connections via edge matching.
   // Direction order matches Unity's HexMapManager.axialDirs:
   //   dir 0: (1,0), dir 1: (1,-1), dir 2: (0,-1), dir 3: (-1,0), dir 4: (-1,1), dir 5: (0,1)
+  // Prefab Face[0] points West (dir=3) at rot=0 → edge formula uses +9 offset instead of +6.
   const EDGE_DIRS = [
     { dq: 1, dr: 0 }, { dq: 1, dr: -1 }, { dq: 0, dr: -1 },
     { dq: -1, dr: 0 }, { dq: -1, dr: 1 }, { dq: 0, dr: 1 },
@@ -243,7 +244,7 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
   const allTileIds = new Set([tileId]);
   for (const tile of placedTiles) allTileIds.add(tile.tileId);
 
-  const rawTemplates = await HexTile.find({ _id: { $in: [...allTileIds] } }, { edges: 1, center: 1 }).lean();
+  const rawTemplates = await HexTile.find({ _id: { $in: [...allTileIds] } }, { edges: 1, type: 1 }).lean();
   const templateMap = new Map(rawTemplates.map(t => [String(t._id), t]));
 
   // Build coord→index map for fast lookup
@@ -253,12 +254,11 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
   });
 
   const newTemplate = templateMap.get(tileId);
-  const faceIdx = d => (d + 2) % 6;
+
   let newConnections = 0;
   const scoredConnections = [];
 
   if (newTemplate) {
-    // Face 2 in the 3D model points East (axial dir 0), so faceIdx(d) = (d+2)%6
     for (let dir = 0; dir < 6; dir++) {
       const { dq, dr } = EDGE_DIRS[dir];
       const neighbor = placedTiles.find(t => t.coord.q === q + dq && t.coord.r === r + dr);
@@ -266,11 +266,13 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
       const neighborTemplate = templateMap.get(neighbor.tileId);
       if (!neighborTemplate) continue;
 
-      const newEdge = newTemplate.edges[(faceIdx(dir) - rot + 6) % 6];
+      // Standard opposing-face: new tile's face toward neighbor vs neighbor's face back.
       const oppDir = (dir + 3) % 6;
-      const neighborEdge = neighborTemplate.edges[(faceIdx(oppDir) - neighbor.rotation + 6) % 6];
+      const newEdge = newTemplate.edges[(dir - rot + 9) % 6];
+      const nbEdge  = neighborTemplate.edges[(oppDir - neighbor.rotation + 9) % 6];
+      const matchResource = newEdge === nbEdge ? newEdge : null;
 
-      if (newEdge === neighborEdge) {
+      if (matchResource) {
         newConnections++;
         scoredConnections.push({ q: neighbor.coord.q, r: neighbor.coord.r });
       }
@@ -288,10 +290,10 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
       if (!neighbor) continue;
       const neighborTemplate = templateMap.get(neighbor.tileId);
       if (!neighborTemplate) continue;
-      const newEdge = newTemplate.edges[(faceIdx(dir) - rot + 6) % 6];
-      const oppDir = (dir + 3) % 6;
-      const neighborEdge = neighborTemplate.edges[(faceIdx(oppDir) - neighbor.rotation + 6) % 6];
-      if (newEdge === neighborEdge && newEdge === stageResourceType)
+      const oppDir2 = (dir + 3) % 6;
+      const newEdge2 = newTemplate.edges[(dir - rot + 9) % 6];
+      const nbEdge2  = neighborTemplate.edges[(oppDir2 - neighbor.rotation + 9) % 6];
+      if (newEdge2 === nbEdge2 && newEdge2 === stageResourceType)
         baseConnectionsGained++;
     }
   }
@@ -324,14 +326,14 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
         const nbTmpl = templateMap.get(nb.tileId);
         if (!nbTmpl) continue;
 
-        const edgeA = tmpl.edges[(faceIdx(dir) - tile.rotation + 6) % 6];
-        const oppDir = (dir + 3) % 6;
-        const edgeB = nbTmpl.edges[(faceIdx(oppDir) - nb.rotation + 6) % 6];
-
-        if (edgeA === resource && edgeA === edgeB) {
+        // Standard opposing-face for cluster: tile's face at dir vs neighbor's face at oppDir.
+        const clusterOppDir = (dir + 3) % 6;
+        const fA = tmpl.edges[(dir - tile.rotation + 9) % 6];
+        const fB = nbTmpl.edges[(clusterOppDir - nb.rotation + 9) % 6];
+        if (fA === resource && fA === fB) {
           adj[i].push(j);
           adj[j].push(i);
-          edges.push([i, j]);
+          edges.push([i, j, 1]);
         }
       }
     }
@@ -346,32 +348,28 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
       for (const next of adj[curr]) stack.push(next);
     }
 
-    // Count edges whose both endpoints are in the cluster
-    return edges.filter(([a, b]) => visited.has(a) && visited.has(b)).length;
+    // Sum match counts for all edges within the cluster
+    return edges.reduce((sum, [a, b, count]) =>
+      visited.has(a) && visited.has(b) ? sum + count : sum, 0);
   }
 
   const levelFor = resource =>
     Math.min(3, 1 + Math.floor(countClusterConnections(resource) / 5));
 
+  // faces[i] = the resource at model Face0i. The material on face i is always edges[i]
+  // regardless of rotation (the whole tile rotates, face materials stay attached).
   const tileFaces = newTemplate
-    ? newTemplate.edges.map(resource => ({
+    ? newTemplate.edges.map((resource, i) => ({
         resource,
         variant: Math.random() < 0.5 ? 1 : 2,
         level: levelFor(resource),
       }))
     : [];
 
-  const tileCenterResource = newTemplate?.center ?? "";
-  const tileCenter = {
-    resource: tileCenterResource,
-    level: levelFor(tileCenterResource),
-  };
-
-  // Store face/center data on the placed tile record
+  // Store face data on the placed tile record
   newPlacedTiles[newPlacedTiles.length - 1] = {
     tileId, coord: { q, r }, rotation: rot,
     faces: tileFaces,
-    center: tileCenter,
   };
 
   // Calculate progress

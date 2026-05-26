@@ -42,7 +42,7 @@ function axialRing(center, radius) {
    Planet stages seeding
    ========================= */
 
-const RESOURCE_TYPES = ["rock", "water", "bio", "lava"];
+const RESOURCE_TYPES = ["rock", "crystal", "bio", "terra"];
 
 function randomResource() {
   return RESOURCE_TYPES[Math.floor(Math.random() * RESOURCE_TYPES.length)];
