@@ -33,7 +33,7 @@ const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
  * @returns {string}  resource name
  */
 function getEdge(edges, rotation, dir) {
-  return edges[(dir - rotation + 8) % 6];
+  return edges[(dir - rotation + 9) % 6];
 }
 
 /**
