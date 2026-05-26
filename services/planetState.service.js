@@ -32,7 +32,7 @@ async function createDeckAndHand(deckSize, handSize = 3, options = {}) {
   const tiles = await HexTile.find({}).lean();
   if (!tiles.length) throw new Error("No HexTile templates");
 
-  const tileIds = await generateStageDeck({
+  const { tileIds } = await generateStageDeck({
     level,
     targetScore,
     stageTheme,

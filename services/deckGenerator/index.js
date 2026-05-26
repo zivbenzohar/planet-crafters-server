@@ -32,10 +32,10 @@ const { mutateDeck }          = require('./deckMutator');
 
 const DIFFICULTY_WINDOWS = {
   1: { min: 90, max: 100 },
-  2: { min: 65, max: 80  },
+  2: { min: 65, max: 85  },
   3: { min: 40, max: 60  },
   4: { min: 20, max: 35  },
-  5: { min: 5,  max: 15  },
+  5: { min: 5,  max: 20  },
 };
 
 const MAX_ITERATIONS   = 20;
@@ -58,29 +58,36 @@ async function generateStageDeck({
   // Always start with a uniform random deck; hill-climbing (Phase B+C) handles
   // difficulty targeting.  Difficulty-biased initial draws are avoided because
   // they cause the 'ease' mutator to over-correct (e.g. adding W=1 mono chaos).
-  let deck = generateInitialDeck(deckSize, tiles, stageTheme);
+  let deck = generateInitialDeck(deckSize, tiles, stageTheme, level);
 
   // ── Phase B + C ───────────────────────────────────────────────────────────
   // Track the best deck seen so that if MAX_ITERATIONS is hit without full
   // convergence we still return the closest result found.
   let bestDeck = deck;
   let bestDistance = Infinity;
+  let finalSR = 0;
+  let mutations = 0;
 
   for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
     const sr = await evaluateDeck(deck, targetScore, NUM_SIMULATIONS);
 
     // Distance to the target window (0 if inside).
     const dist = sr < window.min ? window.min - sr : sr > window.max ? sr - window.max : 0;
-    if (dist < bestDistance) { bestDistance = dist; bestDeck = deck; }
+    if (dist < bestDistance) { bestDistance = dist; bestDeck = deck; finalSR = sr; }
 
     if (dist === 0) break; // converged
 
     const direction = sr > window.max ? 'harden' : 'ease';
     deck = mutateDeck(deck, direction, tiles);
+    mutations++;
   }
 
-  // Return MongoDB ObjectId strings; the caller slices into hand + deck.
-  return bestDeck.map(t => String(t._id));
+  // Return tile IDs plus convergence metadata for callers that want it.
+  return {
+    tileIds:   bestDeck.map(t => String(t._id)),
+    mutations,
+    finalSR:   Math.round(finalSR),
+  };
 }
 
 module.exports = { generateStageDeck };

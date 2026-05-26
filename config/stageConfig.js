@@ -27,9 +27,9 @@ const DEFAULT_TARGET = 20;
 const TARGET_BY_LEVEL = {
   1: 50,
   2: 54,
-  3: 57,
-  4: 59,
-  5: 61,
+  3: 56,
+  4: 57,
+  5: 59,
 };
 
 /**

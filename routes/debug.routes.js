@@ -13,10 +13,10 @@ const { simulateGame }  = require('../services/deckGenerator/simulationCore');
 // Mirrors the windows in deckGenerator/index.js (not exported from there).
 const DIFFICULTY_WINDOWS = {
   1: { min: 90, max: 100 },
-  2: { min: 65, max: 80  },
+  2: { min: 65, max: 85  },
   3: { min: 40, max: 60  },
   4: { min: 20, max: 35  },
-  5: { min: 5,  max: 15  },
+  5: { min: 5,  max: 20  },
 };
 
 const MAX_ITERATIONS  = 20;
@@ -31,7 +31,7 @@ const NUM_SIMULATIONS = 1000;
 async function buildDeckWithMeta({ level, targetScore, tiles, deckSize = 30 }) {
   const window = DIFFICULTY_WINDOWS[level] ?? DIFFICULTY_WINDOWS[3];
 
-  let deck = generateInitialDeck(deckSize, tiles, {});
+  let deck = generateInitialDeck(deckSize, tiles, {}, level);
   let bestDeck = deck;
   let bestDistance = Infinity;
   let finalSR = 0;

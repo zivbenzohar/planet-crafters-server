@@ -57,29 +57,81 @@ function randomPick(arr) {
 
 /**
  * Generate an initial candidate deck of `size` tiles drawn (with replacement)
- * from `tilePool`, weighted by `stageTheme`.
+ * from `tilePool`, ordered in three difficulty-ascending sections:
  *
- * stageTheme format: { rock: 0.6, bio: 0.4 }  – resource → relative weight.
- * If empty / omitted, all tiles have equal probability.
+ *   Section 1 (slots 1–⌊size/3⌋)   : weighted toward tile level 1
+ *   Section 2 (next ⌊size/3⌋)      : weighted toward tile level 2
+ *   Section 3 (remainder)           : weighted toward tile level 3
+ *
+ * The section weights shift with stageLevel so that easier stages draw more
+ * level-1 tiles overall and harder stages draw more level-3 tiles overall.
+ *
+ * stageTheme format: { rock: 0.6, bio: 0.4 } – multiplied on top of section
+ * weights. If empty / omitted, only section weights apply.
  *
  * @param {number}   size
- * @param {object[]} tilePool  – full tile objects { _id, edges, … }
+ * @param {object[]} tilePool    full tile objects { _id, edges, level, … }
  * @param {object}   [stageTheme]
- * @returns {object[]}  array of tile objects (length === size)
+ * @param {number}   [stageLevel=3]  stage difficulty 1-5
+ * @returns {object[]}  ordered array of tile objects (length === size)
  */
-function generateInitialDeck(size, tilePool, stageTheme = {}) {
+function generateInitialDeck(size, tilePool, stageTheme = {}, stageLevel = 3) {
+  // Group catalog tiles by their level field.
+  const byLevel = { 1: [], 2: [], 3: [] };
+  for (const tile of tilePool) {
+    const lv = tile.level || 2;
+    (byLevel[lv] || byLevel[2]).push(tile);
+  }
+
+  // [wL1, wL2, wL3] per section per stage level.
+  // Rows = stage difficulty 1-5; cols = [section1, section2, section3].
+  const SECTION_WEIGHTS = {
+    1: [[8, 2, 0], [3, 6, 1], [0, 7, 3]],
+    2: [[7, 3, 0], [2, 6, 2], [0, 5, 5]],
+    3: [[6, 4, 0], [1, 6, 3], [0, 3, 7]],
+    4: [[4, 5, 1], [1, 5, 4], [0, 2, 8]],
+    5: [[3, 5, 2], [0, 4, 6], [0, 1, 9]],
+  };
+
+  const sw = SECTION_WEIGHTS[stageLevel] ?? SECTION_WEIGHTS[3];
   const hasTheme = stageTheme && Object.keys(stageTheme).length > 0;
 
-  const weights = tilePool.map(tile => {
+  function themeWeight(tile) {
     if (!hasTheme) return 1;
     let w = 0;
-    for (const [resource, themeWeight] of Object.entries(stageTheme)) {
-      w += tile.edges.filter(e => e === resource).length * themeWeight;
+    for (const [resource, tw] of Object.entries(stageTheme)) {
+      w += tile.edges.filter(e => e === resource).length * tw;
     }
-    return w > 0 ? w : 1; // ensure > 0
-  });
+    return w > 0 ? w : 1;
+  }
 
-  return Array.from({ length: size }, () => weightedPick(tilePool, weights));
+  const secSize = Math.floor(size / 3);
+  const sections = [
+    { count: secSize,          lw: sw[0] },
+    { count: secSize,          lw: sw[1] },
+    { count: size - 2*secSize, lw: sw[2] },
+  ];
+
+  const deck = [];
+  for (const { count, lw: [wL1, wL2, wL3] } of sections) {
+    const pool = [], weights = [];
+    for (const [lv, lvW] of [[1, wL1], [2, wL2], [3, wL3]]) {
+      if (lvW === 0) continue;
+      for (const tile of byLevel[lv] ?? []) {
+        pool.push(tile);
+        weights.push(lvW * themeWeight(tile));
+      }
+    }
+    // Fallback: uniform draw if a section's level groups are all empty.
+    const src = pool.length > 0
+      ? { pool, weights }
+      : { pool: tilePool, weights: tilePool.map(() => 1) };
+    for (let i = 0; i < count; i++) {
+      deck.push(weightedPick(src.pool, src.weights));
+    }
+  }
+
+  return deck;
 }
 
 module.exports = { getTileWeight, weightedPick, randomPick, generateInitialDeck };
