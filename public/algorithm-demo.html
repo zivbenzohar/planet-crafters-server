@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Planet Crafters — Algorithm PoC</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --border:    #2a2d3e;
+      --text:      #e2e8f0;
+      --muted:     #8892a4;
+      --accent:    #6c8ef5;
+      --green:     #22c55e;
+      --red:       #ef4444;
+      --amber:     #f59e0b;
+      --blue:      #3b82f6;
+      --purple:    #a855f7;
+      --brown:     #92400e;
+      --teal:      #14b8a6;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      padding: 24px 16px 64px;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    .logo {
+      font-size: 13px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    h1 {
+      font-size: clamp(22px, 4vw, 32px);
+      font-weight: 700;
+      background: linear-gradient(135deg, #6c8ef5 0%, #a855f7 50%, #14b8a6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.2;
+    }
+    .subtitle {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    /* ── Controls ── */
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 36px;
+    }
+    label { color: var(--muted); font-size: 14px; }
+    select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 15px;
+      cursor: pointer;
+      outline: none;
+    }
+    select:focus { border-color: var(--accent); }
+    button#generate {
+      background: linear-gradient(135deg, #4f6bcc 0%, #7c3aed 100%);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    button#generate:disabled { opacity: .4; cursor: not-allowed; }
+    button#generate:not(:disabled):hover { opacity: .88; }
+
+    /* ── Spinner ── */
+    #spinner {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      margin: 32px 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .spin-ring {
+      width: 44px; height: 44px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error ── */
+    #error-box {
+      display: none;
+      background: #2d1414;
+      border: 1px solid var(--red);
+      border-radius: 10px;
+      padding: 16px 20px;
+      color: #fca5a5;
+      font-size: 14px;
+      max-width: 680px;
+      margin: 0 auto 28px;
+    }
+
+    /* ── Results container ── */
+    #results { display: none; max-width: 860px; margin: 0 auto; }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px 24px;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    /* ── Stats row ── */
+    .stats-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .stat {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 16px;
+      min-width: 120px;
+      flex: 1 1 120px;
+    }
+    .stat-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .stat-value { font-size: 20px; font-weight: 700; color: var(--text); }
+
+    /* ── SR Badge ── */
+    .sr-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-left: 10px;
+    }
+    .sr-badge.good  { background: #14532d; color: var(--green); }
+    .sr-badge.bad   { background: #450a0a; color: var(--red); }
+
+    /* ── Composition bar ── */
+    .comp-bar {
+      height: 28px;
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      margin-bottom: 10px;
+    }
+    .comp-seg {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+      transition: width .4s ease;
+      white-space: nowrap;
+    }
+    .comp-legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .comp-legend span { display: flex; align-items: center; gap: 5px; }
+    .dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+    /* ── Deck pills ── */
+    .deck-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 4px;
+    }
+    .tile-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border-radius: 999px;
+      padding: 4px 11px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid transparent;
+    }
+    .w-tag {
+      font-size: 10px;
+      opacity: .75;
+    }
+
+    /* Tile color by dominant resource */
+    .tile-bio    { background: #14532d; color: #86efac; border-color: #166534; }
+    .tile-crystal{ background: #1e3a5f; color: #93c5fd; border-color: #1d4ed8; }
+    .tile-gold   { background: #451a03; color: #fcd34d; border-color: #92400e; }
+    .tile-rock   { background: #1c1917; color: #a8a29e; border-color: #44403c; }
+    .tile-multi  { background: #2e1065; color: #d8b4fe; border-color: #7e22ce; }
+
+    /* ── Chart ── */
+    .chart-wrap {
+      position: relative;
+      height: 260px;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 540px) {
+      .card { padding: 16px; }
+      .stat-value { font-size: 17px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <p class="logo">&#9632; Planet Crafters</p>
+  <h1>Algorithm Proof of Concept</h1>
+  <p class="subtitle">Live demonstration of the Tile Stack Generation Algorithm</p>
+</header>
+
+<div class="controls">
+  <label for="levelSelect">Difficulty level</label>
+  <select id="levelSelect">
+    <option value="1">Level 1 — Easy (SR 90–100%)</option>
+    <option value="2">Level 2 — Normal (SR 65–80%)</option>
+    <option value="3" selected>Level 3 — Medium (SR 40–60%)</option>
+    <option value="4">Level 4 — Hard (SR 20–35%)</option>
+    <option value="5">Level 5 — Expert (SR 5–15%)</option>
+  </select>
+  <button id="generate">Generate Deck</button>
+</div>
+
+<div id="spinner">
+  <div class="spin-ring"></div>
+  <span>Running hill-climbing optimizer + 500 simulations… (~30s on cold server)</span>
+</div>
+
+<div id="error-box"></div>
+
+<div id="results">
+
+  <!-- ── Deck card ── -->
+  <div class="card" id="card-deck">
+    <div class="card-title">Deck Generator</div>
+
+    <div class="stats-row" id="deck-stats"></div>
+
+    <div style="margin-top:20px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Composition</div>
+      <div class="comp-bar" id="comp-bar"></div>
+      <div class="comp-legend" id="comp-legend"></div>
+    </div>
+
+    <div style="margin-top:20px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">30-Tile Deck</div>
+      <div class="deck-grid" id="deck-tiles"></div>
+    </div>
+  </div>
+
+  <!-- ── Simulation card ── -->
+  <div class="card" id="card-sim">
+    <div class="card-title">Simulation Results (500 runs)</div>
+
+    <div class="stats-row" id="sim-stats"></div>
+
+    <div style="margin-top:20px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Score distribution</div>
+      <div class="chart-wrap">
+        <canvas id="histChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  const WEIGHT_COLORS = {
+    W1: '#334155',   // slate
+    W2: '#1e3a5f',   // blue
+    W3: '#312e81',   // indigo
+    W5: '#4a1d96',   // violet
+  };
+
+  const WEIGHT_LABELS = {
+    W1: 'W1 — Mono',
+    W2: 'W2 — MoreX',
+    W3: 'W3 — HalfX',
+    W5: 'W5 — TripleX',
+  };
+
+  function tileColorClass(type) {
+    const t = (type || '').toLowerCase();
+    if (/bio|plant|leaf|green/.test(t)) return 'tile-bio';
+    if (/crystal|ice|blue/.test(t))     return 'tile-crystal';
+    if (/gold|sun|amber|yellow/.test(t)) return 'tile-gold';
+    if (/rock|stone|sand|desert/.test(t)) return 'tile-rock';
+    // Classify by edge content — multi if multiple resource types appear
+    return 'tile-multi';
+  }
+
+  function tileColorClassFromEdges(tile) {
+    const edges = tile.edges || [];
+    const center = tile.center || '';
+    const all = [...edges, center].map(e => (e || '').toLowerCase());
+    const types = new Set(all.filter(e => e && e !== 'empty' && e !== ''));
+    if (types.size === 0) return 'tile-rock';
+    if (types.size > 1)   return 'tile-multi';
+    const t = [...types][0];
+    if (/bio|plant|leaf|forest/.test(t))   return 'tile-bio';
+    if (/crystal|ice|water|ocean/.test(t)) return 'tile-crystal';
+    if (/gold|sun|lava|fire/.test(t))      return 'tile-gold';
+    return 'tile-rock';
+  }
+
+  function makeStat(label, value, extra = '') {
+    return `<div class="stat">
+      <div class="stat-label">${label}</div>
+      <div class="stat-value">${value}${extra}</div>
+    </div>`;
+  }
+
+  let histChartInstance = null;
+
+  // ── Render deck data ──────────────────────────────────────────────────────
+
+  function renderDeck(data) {
+    const { level, targetScore, srWindow, simulatedSR, convergedInIterations,
+            generationTimeMs, deck, deckSummary } = data;
+
+    // Determine if SR is inside the window
+    const [winMin, winMax] = srWindow.replace('%','').split('-').map(Number);
+    const inWindow = simulatedSR >= winMin && simulatedSR <= winMax;
+    const badge = `<span class="sr-badge ${inWindow ? 'good' : 'bad'}">${inWindow ? '✓ in window' : '✗ out of window'}</span>`;
+
+    document.getElementById('deck-stats').innerHTML = [
+      makeStat('Level', level),
+      makeStat('Target Score', targetScore),
+      makeStat('SR Window', srWindow),
+      makeStat('Simulated SR', simulatedSR + '%') + badge,
+      makeStat('Converged in', convergedInIterations + ' iters'),
+      makeStat('Gen time', generationTimeMs + ' ms'),
+    ].join('');
+
+    // Fix: badge is appended after last stat — move inside container
+    // (already inline above, adjust markup slightly)
+
+    // Composition bar
+    const total = Object.values(deckSummary).reduce((s, v) => s + v, 0) || 1;
+    const bar = document.getElementById('comp-bar');
+    const legend = document.getElementById('comp-legend');
+    bar.innerHTML = '';
+    legend.innerHTML = '';
+
+    ['W1','W2','W3','W5'].forEach(key => {
+      const count = deckSummary[key] || 0;
+      const pct = (count / total * 100).toFixed(1);
+      const seg = document.createElement('div');
+      seg.className = 'comp-seg';
+      seg.style.width = pct + '%';
+      seg.style.background = WEIGHT_COLORS[key];
+      if (count > 0) seg.textContent = `${key}:${count}`;
+      bar.appendChild(seg);
+
+      const li = document.createElement('span');
+      li.innerHTML = `<span class="dot" style="background:${WEIGHT_COLORS[key]}"></span>${WEIGHT_LABELS[key]}: ${count}`;
+      legend.appendChild(li);
+    });
+
+    // Tile pills
+    const grid = document.getElementById('deck-tiles');
+    grid.innerHTML = '';
+    deck.forEach(tile => {
+      const cls = tileColorClassFromEdges(tile);
+      const pill = document.createElement('span');
+      pill.className = `tile-pill ${cls}`;
+      pill.innerHTML = `${tile.type || 'tile'} <span class="w-tag">W${tile.weight}</span>`;
+      pill.title = `Edges: ${(tile.edges||[]).join(', ')}`;
+      grid.appendChild(pill);
+    });
+  }
+
+  // ── Render simulation data ────────────────────────────────────────────────
+
+  function renderSim(data) {
+    const { targetScore, simulatedSR, scoreStats, histogram } = data;
+
+    document.getElementById('sim-stats').innerHTML = [
+      makeStat('Success Rate', simulatedSR + '%'),
+      makeStat('Min score', scoreStats.min),
+      makeStat('Max score', scoreStats.max),
+      makeStat('Avg score', scoreStats.avg),
+      makeStat('Target', targetScore),
+    ].join('');
+
+    // Chart
+    const labels = Object.keys(histogram);
+    const counts = Object.values(histogram);
+    const colors = labels.map(lbl => {
+      const lo = parseInt(lbl.split('-')[0], 10);
+      return lo + 4 >= targetScore ? 'rgba(34,197,94,0.75)' : 'rgba(239,68,68,0.65)';
+    });
+    const borderColors = colors.map(c => c.replace(/[\d.]+\)$/, '1)'));
+
+    if (histChartInstance) { histChartInstance.destroy(); }
+
+    histChartInstance = new Chart(document.getElementById('histChart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Simulations',
+          data: counts,
+          backgroundColor: colors,
+          borderColor: borderColors,
+          borderWidth: 1,
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: items => `Score ${items[0].label}`,
+              label: item => ` ${item.raw} runs`,
+            },
+          },
+          annotation: {}, // placeholder; we draw target line via annotation below
+        },
+        scales: {
+          x: {
+            ticks: { color: '#8892a4', font: { size: 11 } },
+            grid: { color: '#2a2d3e' },
+            title: { display: true, text: 'Score bucket', color: '#8892a4', font: { size: 12 } },
+          },
+          y: {
+            ticks: { color: '#8892a4', font: { size: 11 } },
+            grid: { color: '#2a2d3e' },
+            title: { display: true, text: 'Simulations', color: '#8892a4', font: { size: 12 } },
+          },
+        },
+      },
+      plugins: [{
+        // Draw a vertical target line
+        id: 'targetLine',
+        afterDraw(chart) {
+          const ctx = chart.ctx;
+          const xAxis = chart.scales.x;
+          const yAxis = chart.scales.y;
+
+          // Find the bucket index where target score falls
+          const targetBucket = Math.floor(targetScore / 5) * 5;
+          const targetLabel  = `${targetBucket}-${targetBucket + 4}`;
+          const idx = labels.indexOf(targetLabel);
+          if (idx < 0) return;
+
+          // x pixel at left edge of that bar
+          const xPx = xAxis.getPixelForValue(idx);
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(xPx, yAxis.top);
+          ctx.lineTo(xPx, yAxis.bottom);
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 4]);
+          ctx.stroke();
+
+          ctx.fillStyle = '#f59e0b';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(`target ≥ ${targetScore}`, xPx + 6, yAxis.top + 16);
+          ctx.restore();
+        },
+      }],
+    });
+  }
+
+  // ── Fetch & orchestrate ───────────────────────────────────────────────────
+
+  document.getElementById('generate').addEventListener('click', async () => {
+    const level = document.getElementById('levelSelect').value;
+    const btn   = document.getElementById('generate');
+
+    btn.disabled = true;
+    document.getElementById('spinner').style.display  = 'flex';
+    document.getElementById('error-box').style.display = 'none';
+    document.getElementById('results').style.display   = 'none';
+
+    try {
+      const [deckRes, simRes] = await Promise.all([
+        fetch(`/api/debug/deck?level=${level}`),
+        fetch(`/api/debug/simulate?level=${level}`),
+      ]);
+
+      if (!deckRes.ok) throw new Error(`Deck endpoint: ${deckRes.status} ${deckRes.statusText}`);
+      if (!simRes.ok)  throw new Error(`Simulate endpoint: ${simRes.status} ${simRes.statusText}`);
+
+      const [deckData, simData] = await Promise.all([deckRes.json(), simRes.json()]);
+
+      if (deckData.error) throw new Error('Deck error: ' + deckData.error);
+      if (simData.error)  throw new Error('Sim error: ' + simData.error);
+
+      renderDeck(deckData);
+      renderSim(simData);
+
+      document.getElementById('results').style.display = 'block';
+    } catch (err) {
+      const box = document.getElementById('error-box');
+      box.style.display = 'block';
+      box.innerHTML = `<strong>Error:</strong> ${err.message}<br>
+        <span style="opacity:.7;font-size:12px">If the server is cold-starting on Render, wait ~30 seconds and try again.</span>`;
+    } finally {
+      document.getElementById('spinner').style.display = 'none';
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

@@ -62,7 +62,7 @@ const tiles = [
   { type: "halfCrystalTerra", edges: [C,C,C,T,T,T], level: 2 },
   { type: "halfBioTerra",     edges: [B,B,B,T,T,T], level: 2 },
 
-  // ========================= Category 6 — 3+3 Non-Contiguous A (AABABB) (6) — Level 2 =========================
+  // ========================= Category 6 — 3+3 Non-Contiguous A (AABABB) (6) — Level 3 =========================
   { type: "altA_halfRockCrystal",  edges: [R,R,C,R,C,C], level: 3 },
   { type: "altA_halfRockBio",      edges: [R,R,B,R,B,B], level: 3 },
   { type: "altA_halfRockTerra",    edges: [R,R,T,R,T,T], level: 3 },
@@ -70,7 +70,7 @@ const tiles = [
   { type: "altA_halfCrystalTerra", edges: [C,C,T,C,T,T], level: 3 },
   { type: "altA_halfBioTerra",     edges: [B,B,T,B,T,T], level: 3 },
 
-  // ========================= Category 7 — 3+3 Non-Contiguous B (AABBAB) (6) — Level 2 =========================
+  // ========================= Category 7 — 3+3 Non-Contiguous B (AABBAB) (6) — Level 3 =========================
   { type: "altB_halfRockCrystal",  edges: [R,R,C,C,R,C], level: 3 },
   { type: "altB_halfRockBio",      edges: [R,R,B,B,R,B], level: 3 },
   { type: "altB_halfRockTerra",    edges: [R,R,T,T,R,T], level: 3 },

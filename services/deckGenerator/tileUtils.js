@@ -3,27 +3,30 @@
 /**
  * Derives tile weight (complexity) from its 6 edges.
  *
- * W=1  mono    – all 6 edges same resource     (allRock, allGold, …)
- * W=2  moreX   – 2 unique types, 4+2 split
- * W=3  halfX   – 2 unique types, 3+3 split
- * W=5  tripleX – 3 unique types, 2+2+2 split
+ * W=1  mono        – all 6 edges same resource           (allRock, allWater, …)
+ * W=2  contiguous  – 2 unique types, edges clustered     (4+2 or 3+3 in one arc)
+ * W=3  split       – 2 unique types, edges non-contiguous (alternating/split pattern)
+ *
+ * Contiguity test: count circular transitions between adjacent edges.
+ * Exactly 2 transitions → one arc per resource (contiguous, W=2).
+ * More than 2 transitions → split or alternating pattern (non-contiguous, W=3).
  *
  * @param {{ edges: string[] }} tile
- * @returns {1|2|3|5}
+ * @returns {1|2|3}
  */
 function getTileWeight(tile) {
   const counts = {};
   for (const e of tile.edges) counts[e] = (counts[e] || 0) + 1;
-  const vals = Object.values(counts).sort((a, b) => b - a); // descending
 
-  if (vals.length === 1) return 1; // mono
-  if (vals.length >= 3) return 5; // 3+ unique types (2+2+2)
+  if (Object.keys(counts).length === 1) return 1; // mono
 
-  // Exactly 2 unique types
-  const [major] = vals;
-  if (major === 4) return 2; // 4+2
-  if (major === 3) return 3; // 3+3
-  return 2; // safety fallback
+  // Count circular transitions to distinguish contiguous from non-contiguous.
+  let transitions = 0;
+  for (let i = 0; i < 6; i++) {
+    if (tile.edges[i] !== tile.edges[(i + 1) % 6]) transitions++;
+  }
+
+  return transitions <= 2 ? 2 : 3;
 }
 
 /**

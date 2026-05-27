@@ -10,7 +10,7 @@ const StageMetaSchema = new mongoose.Schema(
     level: { type: Number, default: 1 },            // Difficulty level (1-5), based on ring distance from center
     resourceType: {
       type: String,
-      enum: ["rock", "terra", "bio", "crystal"],
+      enum: ["rock", "crystal", "bio", "terra"],
       required: true,
     },
     isUnlocked: { type: Boolean, default: false }, // Available/unlocked
@@ -18,7 +18,6 @@ const StageMetaSchema = new mongoose.Schema(
     isCompleted: { type: Boolean, default: false },// Whether completed
     coinsAwarded: { type: Number, default: 0, min: 0, max: 3 }, // 1-3 coins on completion
     lastPlayedAt: { type: Date, default: null },
-    isMatchStage: { type: Boolean, default: false },
   },
   { _id: false }
 );

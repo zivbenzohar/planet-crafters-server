@@ -29,39 +29,81 @@ const WINDOWS = {
   5: [5,  15],
 };
 
-// ── 26-tile catalog (mirrors seed/seedHexTiles.js) with deterministic IDs ────
+// ── 64-tile catalog (mirrors seed/seedHexTiles.js) with deterministic IDs ────
 // _id is a plain string so generateStageDeck can map IDs → tile objects.
 const CATALOG = [
-  // 4-2  (W=2)
-  { _id: 'tile_00', type: 'moreRockGold',      center: 'rock',    edges: ['rock','rock','rock','rock','gold','gold'] },
-  { _id: 'tile_01', type: 'moreRockBio',       center: 'rock',    edges: ['rock','rock','rock','rock','bio','bio'] },
-  { _id: 'tile_02', type: 'moreRockCrystal',   center: 'rock',    edges: ['rock','rock','rock','rock','crystal','crystal'] },
-  { _id: 'tile_03', type: 'moreGoldRock',      center: 'gold',    edges: ['gold','gold','gold','gold','rock','rock'] },
-  { _id: 'tile_04', type: 'moreGoldBio',       center: 'gold',    edges: ['gold','gold','gold','gold','bio','bio'] },
-  { _id: 'tile_05', type: 'moreGoldCrystal',   center: 'gold',    edges: ['gold','gold','gold','gold','crystal','crystal'] },
-  { _id: 'tile_06', type: 'moreBioRock',       center: 'bio',     edges: ['bio','bio','bio','bio','rock','rock'] },
-  { _id: 'tile_07', type: 'moreBioGold',       center: 'bio',     edges: ['bio','bio','bio','bio','gold','gold'] },
-  { _id: 'tile_08', type: 'moreBioCrystal',    center: 'bio',     edges: ['bio','bio','bio','bio','crystal','crystal'] },
-  { _id: 'tile_09', type: 'moreCrystalRock',   center: 'crystal', edges: ['crystal','crystal','crystal','crystal','rock','rock'] },
-  { _id: 'tile_10', type: 'moreCrystalGold',   center: 'crystal', edges: ['crystal','crystal','crystal','crystal','gold','gold'] },
-  { _id: 'tile_11', type: 'moreCrystalBio',    center: 'crystal', edges: ['crystal','crystal','crystal','crystal','bio','bio'] },
-  // 3-3  (W=3)
-  { _id: 'tile_12', type: 'halfRockGold',      center: 'rock',    edges: ['rock','rock','rock','gold','gold','gold'] },
-  { _id: 'tile_13', type: 'halfRockBio',       center: 'rock',    edges: ['rock','rock','rock','bio','bio','bio'] },
-  { _id: 'tile_14', type: 'halfRockCrystal',   center: 'rock',    edges: ['rock','rock','rock','crystal','crystal','crystal'] },
-  { _id: 'tile_15', type: 'halfGoldBio',       center: 'gold',    edges: ['gold','gold','gold','bio','bio','bio'] },
-  { _id: 'tile_16', type: 'halfGoldCrystal',   center: 'gold',    edges: ['gold','gold','gold','crystal','crystal','crystal'] },
-  { _id: 'tile_17', type: 'halfBioCrystal',    center: 'bio',     edges: ['bio','bio','bio','crystal','crystal','crystal'] },
-  // 2-2-2  (W=5)
-  { _id: 'tile_18', type: 'tripleRockGoldBio',     center: 'rock', edges: ['rock','rock','gold','gold','bio','bio'] },
-  { _id: 'tile_19', type: 'tripleRockGoldCrystal', center: 'rock', edges: ['rock','rock','gold','gold','crystal','crystal'] },
-  { _id: 'tile_20', type: 'tripleRockBioCrystal',  center: 'rock', edges: ['rock','rock','bio','bio','crystal','crystal'] },
-  { _id: 'tile_21', type: 'tripleGoldBioCrystal',  center: 'gold', edges: ['gold','gold','bio','bio','crystal','crystal'] },
-  // mono  (W=1)
-  { _id: 'tile_22', type: 'allRock',    center: 'rock',    edges: ['rock','rock','rock','rock','rock','rock'] },
-  { _id: 'tile_23', type: 'allGold',    center: 'gold',    edges: ['gold','gold','gold','gold','gold','gold'] },
-  { _id: 'tile_24', type: 'allBio',     center: 'bio',     edges: ['bio','bio','bio','bio','bio','bio'] },
-  { _id: 'tile_25', type: 'allCrystal', center: 'crystal', edges: ['crystal','crystal','crystal','crystal','crystal','crystal'] },
+  // Category 1 — Mono (W=1): 4 tiles
+  { _id: 'tile_00', type: 'allRock',  center: 'rock',  edges: ['rock','rock','rock','rock','rock','rock'] },
+  { _id: 'tile_01', type: 'allWater', center: 'water', edges: ['water','water','water','water','water','water'] },
+  { _id: 'tile_02', type: 'allBio',   center: 'bio',   edges: ['bio','bio','bio','bio','bio','bio'] },
+  { _id: 'tile_03', type: 'allLava',  center: 'lava',  edges: ['lava','lava','lava','lava','lava','lava'] },
+  // Category 2 — Bi 4+2 Contiguous [A,A,A,A,B,B] (W=2): 12 tiles
+  { _id: 'tile_04', type: 'moreRockWater',  center: 'rock',  edges: ['rock','rock','rock','rock','water','water'] },
+  { _id: 'tile_05', type: 'moreRockBio',    center: 'rock',  edges: ['rock','rock','rock','rock','bio','bio'] },
+  { _id: 'tile_06', type: 'moreRockLava',   center: 'rock',  edges: ['rock','rock','rock','rock','lava','lava'] },
+  { _id: 'tile_07', type: 'moreWaterRock',  center: 'water', edges: ['water','water','water','water','rock','rock'] },
+  { _id: 'tile_08', type: 'moreWaterBio',   center: 'water', edges: ['water','water','water','water','bio','bio'] },
+  { _id: 'tile_09', type: 'moreWaterLava',  center: 'water', edges: ['water','water','water','water','lava','lava'] },
+  { _id: 'tile_10', type: 'moreBioRock',    center: 'bio',   edges: ['bio','bio','bio','bio','rock','rock'] },
+  { _id: 'tile_11', type: 'moreBioWater',   center: 'bio',   edges: ['bio','bio','bio','bio','water','water'] },
+  { _id: 'tile_12', type: 'moreBioLava',    center: 'bio',   edges: ['bio','bio','bio','bio','lava','lava'] },
+  { _id: 'tile_13', type: 'moreLavaRock',   center: 'lava',  edges: ['lava','lava','lava','lava','rock','rock'] },
+  { _id: 'tile_14', type: 'moreLavaWater',  center: 'lava',  edges: ['lava','lava','lava','lava','water','water'] },
+  { _id: 'tile_15', type: 'moreLavaBio',    center: 'lava',  edges: ['lava','lava','lava','lava','bio','bio'] },
+  // Category 3 — Bi 4+2 Non-Contiguous Pattern A [A,A,A,B,A,B] (W=3): 12 tiles
+  { _id: 'tile_16', type: 'altA_moreRockWater',  center: 'rock',  edges: ['rock','rock','rock','water','rock','water'] },
+  { _id: 'tile_17', type: 'altA_moreRockBio',    center: 'rock',  edges: ['rock','rock','rock','bio','rock','bio'] },
+  { _id: 'tile_18', type: 'altA_moreRockLava',   center: 'rock',  edges: ['rock','rock','rock','lava','rock','lava'] },
+  { _id: 'tile_19', type: 'altA_moreWaterRock',  center: 'water', edges: ['water','water','water','rock','water','rock'] },
+  { _id: 'tile_20', type: 'altA_moreWaterBio',   center: 'water', edges: ['water','water','water','bio','water','bio'] },
+  { _id: 'tile_21', type: 'altA_moreWaterLava',  center: 'water', edges: ['water','water','water','lava','water','lava'] },
+  { _id: 'tile_22', type: 'altA_moreBioRock',    center: 'bio',   edges: ['bio','bio','bio','rock','bio','rock'] },
+  { _id: 'tile_23', type: 'altA_moreBioWater',   center: 'bio',   edges: ['bio','bio','bio','water','bio','water'] },
+  { _id: 'tile_24', type: 'altA_moreBioLava',    center: 'bio',   edges: ['bio','bio','bio','lava','bio','lava'] },
+  { _id: 'tile_25', type: 'altA_moreLavaRock',   center: 'lava',  edges: ['lava','lava','lava','rock','lava','rock'] },
+  { _id: 'tile_26', type: 'altA_moreLavaWater',  center: 'lava',  edges: ['lava','lava','lava','water','lava','water'] },
+  { _id: 'tile_27', type: 'altA_moreLavaBio',    center: 'lava',  edges: ['lava','lava','lava','bio','lava','bio'] },
+  // Category 4 — Bi 4+2 Non-Contiguous Pattern B [A,A,B,A,A,B] (W=3): 12 tiles
+  { _id: 'tile_28', type: 'altB_moreRockWater',  center: 'rock',  edges: ['rock','rock','water','rock','rock','water'] },
+  { _id: 'tile_29', type: 'altB_moreRockBio',    center: 'rock',  edges: ['rock','rock','bio','rock','rock','bio'] },
+  { _id: 'tile_30', type: 'altB_moreRockLava',   center: 'rock',  edges: ['rock','rock','lava','rock','rock','lava'] },
+  { _id: 'tile_31', type: 'altB_moreWaterRock',  center: 'water', edges: ['water','water','rock','water','water','rock'] },
+  { _id: 'tile_32', type: 'altB_moreWaterBio',   center: 'water', edges: ['water','water','bio','water','water','bio'] },
+  { _id: 'tile_33', type: 'altB_moreWaterLava',  center: 'water', edges: ['water','water','lava','water','water','lava'] },
+  { _id: 'tile_34', type: 'altB_moreBioRock',    center: 'bio',   edges: ['bio','bio','rock','bio','bio','rock'] },
+  { _id: 'tile_35', type: 'altB_moreBioWater',   center: 'bio',   edges: ['bio','bio','water','bio','bio','water'] },
+  { _id: 'tile_36', type: 'altB_moreBioLava',    center: 'bio',   edges: ['bio','bio','lava','bio','bio','lava'] },
+  { _id: 'tile_37', type: 'altB_moreLavaRock',   center: 'lava',  edges: ['lava','lava','rock','lava','lava','rock'] },
+  { _id: 'tile_38', type: 'altB_moreLavaWater',  center: 'lava',  edges: ['lava','lava','water','lava','lava','water'] },
+  { _id: 'tile_39', type: 'altB_moreLavaBio',    center: 'lava',  edges: ['lava','lava','bio','lava','lava','bio'] },
+  // Category 5 — Bi 3+3 Contiguous [A,A,A,B,B,B] (W=2): 6 tiles
+  { _id: 'tile_40', type: 'halfRockWater',  center: 'rock',  edges: ['rock','rock','rock','water','water','water'] },
+  { _id: 'tile_41', type: 'halfRockBio',    center: 'rock',  edges: ['rock','rock','rock','bio','bio','bio'] },
+  { _id: 'tile_42', type: 'halfRockLava',   center: 'rock',  edges: ['rock','rock','rock','lava','lava','lava'] },
+  { _id: 'tile_43', type: 'halfWaterBio',   center: 'water', edges: ['water','water','water','bio','bio','bio'] },
+  { _id: 'tile_44', type: 'halfWaterLava',  center: 'water', edges: ['water','water','water','lava','lava','lava'] },
+  { _id: 'tile_45', type: 'halfBioLava',    center: 'bio',   edges: ['bio','bio','bio','lava','lava','lava'] },
+  // Category 6 — Bi 3+3 Non-Contiguous Pattern A [A,A,B,A,B,B] (W=3): 6 tiles
+  { _id: 'tile_46', type: 'altA_halfRockWater',  center: 'rock',  edges: ['rock','rock','water','rock','water','water'] },
+  { _id: 'tile_47', type: 'altA_halfRockBio',    center: 'rock',  edges: ['rock','rock','bio','rock','bio','bio'] },
+  { _id: 'tile_48', type: 'altA_halfRockLava',   center: 'rock',  edges: ['rock','rock','lava','rock','lava','lava'] },
+  { _id: 'tile_49', type: 'altA_halfWaterBio',   center: 'water', edges: ['water','water','bio','water','bio','bio'] },
+  { _id: 'tile_50', type: 'altA_halfWaterLava',  center: 'water', edges: ['water','water','lava','water','lava','lava'] },
+  { _id: 'tile_51', type: 'altA_halfBioLava',    center: 'bio',   edges: ['bio','bio','lava','bio','lava','lava'] },
+  // Category 7 — Bi 3+3 Non-Contiguous Pattern B [A,A,B,B,A,B] (W=3): 6 tiles
+  { _id: 'tile_52', type: 'altB_halfRockWater',  center: 'rock',  edges: ['rock','rock','water','water','rock','water'] },
+  { _id: 'tile_53', type: 'altB_halfRockBio',    center: 'rock',  edges: ['rock','rock','bio','bio','rock','bio'] },
+  { _id: 'tile_54', type: 'altB_halfRockLava',   center: 'rock',  edges: ['rock','rock','lava','lava','rock','lava'] },
+  { _id: 'tile_55', type: 'altB_halfWaterBio',   center: 'water', edges: ['water','water','bio','bio','water','bio'] },
+  { _id: 'tile_56', type: 'altB_halfWaterLava',  center: 'water', edges: ['water','water','lava','lava','water','lava'] },
+  { _id: 'tile_57', type: 'altB_halfBioLava',    center: 'bio',   edges: ['bio','bio','lava','lava','bio','lava'] },
+  // Category 8 — Bi 3+3 Non-Contiguous Pattern C [A,B,A,B,A,B] (W=3): 6 tiles
+  { _id: 'tile_58', type: 'altC_halfRockWater',  center: 'rock',  edges: ['rock','water','rock','water','rock','water'] },
+  { _id: 'tile_59', type: 'altC_halfRockBio',    center: 'rock',  edges: ['rock','bio','rock','bio','rock','bio'] },
+  { _id: 'tile_60', type: 'altC_halfRockLava',   center: 'rock',  edges: ['rock','lava','rock','lava','rock','lava'] },
+  { _id: 'tile_61', type: 'altC_halfWaterBio',   center: 'water', edges: ['water','bio','water','bio','water','bio'] },
+  { _id: 'tile_62', type: 'altC_halfWaterLava',  center: 'water', edges: ['water','lava','water','lava','water','lava'] },
+  { _id: 'tile_63', type: 'altC_halfBioLava',    center: 'bio',   edges: ['bio','lava','bio','lava','bio','lava'] },
 ];
 
 // Build a fast ID → tile lookup used throughout.
@@ -110,7 +152,7 @@ function dominantResource(tile) {
 }
 
 // Resource → single uppercase letter for the ASCII grid.
-const RES_LETTER = { rock: 'R', gold: 'G', bio: 'B', crystal: 'C' };
+const RES_LETTER = { rock: 'R', water: 'W', bio: 'B', lava: 'L' };
 
 /**
  * Render the board as an ASCII hex grid.
@@ -196,7 +238,7 @@ async function runLevelTest(level) {
   });
 
   // ── Deck display ──────────────────────────────────────────────────────────
-  const weightCounts = { 1: 0, 2: 0, 3: 0, 5: 0 };
+  const weightCounts = { 1: 0, 2: 0, 3: 0 };
   const weightLabels = deck.map(t => {
     const w = getTileWeight(t);
     weightCounts[w] = (weightCounts[w] || 0) + 1;
@@ -215,7 +257,7 @@ async function runLevelTest(level) {
     console.log(`${prefix}${r}${suffix}`);
   });
 
-  const breakdown = [1, 2, 3, 5]
+  const breakdown = [1, 2, 3]
     .filter(w => weightCounts[w] > 0)
     .map(w => `W${w}×${weightCounts[w]}`)
     .join('  ');
@@ -278,7 +320,7 @@ function runDetailedTrace(deck, targetScore) {
   console.log();
 
   // ── ASCII board ───────────────────────────────────────────────────────────
-  console.log('Board  (R=rock  G=gold  B=bio  C=crystal  .=empty):');
+  console.log('Board  (R=rock  W=water  B=bio  L=lava  .=empty):');
   console.log();
   console.log(renderBoard(board));
   console.log();

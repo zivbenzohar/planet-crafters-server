@@ -4,19 +4,18 @@
  * Pure, synchronous simulation logic.
  * No DB access, no Node-specific APIs (safe to run inside Worker Threads).
  *
- * Edge formula derivation (mirrors planetState.service.js):
- *   "Face 2 in the 3D model points East (axial dir 0)"
- *   → faceIdx(dir) = (dir + 2) % 6
- *   → adjusted for rotation: edges[(dir + 2 - rotation + 6) % 6]
- *   ≡ edges[(dir - rotation + 8) % 6]
+ * Edge formula (mirrors planetState.service.js, derived from HexTileLayout geometry):
+ *   Face ordering at rot=0: Face[0]=W, [1]=NW, [2]=NE, [3]=E, [4]=SE, [5]=SW
+ *   (prefab model has Face[0] pointing West, so offset +3 vs naive 0=E assumption)
+ *   Edge at direction d with rotation rot: (d - rot + 9) % 6
  *
- * Axial directions (flat-top hex, identical order to EDGE_DIRS in planetState.service.js):
+ * Axial directions (identical order to EDGE_DIRS in planetState.service.js):
  *   dir 0: (dq=+1, dr= 0)  East
- *   dir 1: (dq=+1, dr=-1)  North-East
- *   dir 2: (dq= 0, dr=-1)  North-West
+ *   dir 1: (dq=+1, dr=-1)  NE
+ *   dir 2: (dq= 0, dr=-1)  NW
  *   dir 3: (dq=-1, dr= 0)  West
- *   dir 4: (dq=-1, dr=+1)  South-West
- *   dir 5: (dq= 0, dr=+1)  South-East
+ *   dir 4: (dq=-1, dr=+1)  SW
+ *   dir 5: (dq= 0, dr=+1)  SE
  */
 
 const DSU = require('./DSU');
@@ -75,10 +74,7 @@ function countConnections(board, q, r, tile, rotation) {
     if (!neighbor) continue;
 
     const oppDir = (dir + 3) % 6;
-    if (
-      getEdge(tile.edges, rotation, dir) ===
-      getEdge(neighbor.tile.edges, neighbor.rotation, oppDir)
-    ) {
+    if (getEdge(tile.edges, rotation, dir) === getEdge(neighbor.tile.edges, neighbor.rotation, oppDir)) {
       connections++;
     }
   }
@@ -95,7 +91,7 @@ function countConnections(board, q, r, tile, rotation) {
  * Merges multiple clusters of the same resource before computing.
  *
  * @param {Map}      board
- * @param {object}   dsus     { rock: DSU, gold: DSU, bio: DSU, crystal: DSU }
+ * @param {object}   dsus     { rock: DSU, crystal: DSU, bio: DSU, terra: DSU }
  * @param {number}   q
  * @param {number}   r
  * @param {object}   tile
@@ -110,6 +106,8 @@ function evolutionBonus(board, dsus, q, r, tile, rotation) {
     const neighbor = board.get(`${q + dq},${r + dr}`);
     if (!neighbor) continue;
 
+    const nk = `${q + dq},${r + dr}`;
+
     const oppDir = (dir + 3) % 6;
     const myEdge = getEdge(tile.edges, rotation, dir);
     const neighborEdge = getEdge(neighbor.tile.edges, neighbor.rotation, oppDir);
@@ -118,9 +116,7 @@ function evolutionBonus(board, dsus, q, r, tile, rotation) {
     const dsu = dsus[myEdge];
     if (!dsu) continue;
 
-    const nk = `${q + dq},${r + dr}`;
     const root = dsu.find(nk);
-
     if (!resourceMerge[myEdge]) {
       resourceMerge[myEdge] = { roots: new Set(), size: 1 };
     }
@@ -153,9 +149,7 @@ function updateDSUs(board, dsus, q, r, tile, rotation) {
 
     const oppDir = (dir + 3) % 6;
     const myEdge = getEdge(tile.edges, rotation, dir);
-    const neighborEdge = getEdge(neighbor.tile.edges, neighbor.rotation, oppDir);
-    if (myEdge !== neighborEdge) continue;
-
+    if (myEdge !== getEdge(neighbor.tile.edges, neighbor.rotation, oppDir)) continue;
     const dsu = dsus[myEdge];
     if (dsu) dsu.union(key, nk);
   }
@@ -174,9 +168,9 @@ function _runGreedy(deckTiles, onMove) {
   const board = new Map();
   const dsus = {
     rock:    new DSU(),
-    gold:    new DSU(),
-    bio:     new DSU(),
     crystal: new DSU(),
+    bio:     new DSU(),
+    terra:   new DSU(),
   };
   let score = 0;
 

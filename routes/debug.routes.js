@@ -95,7 +95,6 @@ router.get('/deck', async (req, res) => {
         type:   tile.type,
         weight: w,
         edges:  tile.edges,
-        center: tile.center,
       };
     });
 
