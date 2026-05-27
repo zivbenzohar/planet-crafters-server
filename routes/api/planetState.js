@@ -67,7 +67,6 @@ router.post("/:planetId/:stageId/reset", auth, async (req, res) => {
   try {
     const { planetId, stageId } = req.params;
     const userId = String(req.user.id);
-
     const result = await resetStageState({ userId, planetId, stageId });
 
     return res.json(result);

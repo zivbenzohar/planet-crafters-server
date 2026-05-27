@@ -20,7 +20,7 @@ router.get("/active", auth, async (req, res) => {
 
     return res.json({
       planetId: planet.planetId,
-      stages: planet.stages,
+      stages: planet.stages.filter(s => !s.meta?.isMatchStage),
       totalCoins: planet.totalCoins ?? 0,
     });
   } catch (e) {
