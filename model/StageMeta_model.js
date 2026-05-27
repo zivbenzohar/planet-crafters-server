@@ -18,6 +18,7 @@ const StageMetaSchema = new mongoose.Schema(
     isCompleted: { type: Boolean, default: false },// Whether completed
     coinsAwarded: { type: Number, default: 0, min: 0, max: 3 }, // 1-3 coins on completion
     lastPlayedAt: { type: Date, default: null },
+    isMatchStage: { type: Boolean, default: false },
   },
   { _id: false }
 );

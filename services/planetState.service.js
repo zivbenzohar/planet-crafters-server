@@ -452,7 +452,7 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
   // Calculate progress
   const score = (state.progress?.score ?? 0) + newConnections + bonusPoints;
   const targetScore = getTargetScore(stageLevel(stage, stageId));
-  const isCompleted = score >= targetScore;
+  const isCompleted = !stage.meta?.isMatchStage && score >= targetScore;
   const developedPercent = Math.min(100, Math.round((score / targetScore) * 100));
 
   const newState = {
@@ -541,4 +541,5 @@ module.exports = {
   saveStageState,
   resetStageState,
   placeTile,
+  createDeckAndHand,
 };
