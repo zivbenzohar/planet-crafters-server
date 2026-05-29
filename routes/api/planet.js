@@ -18,10 +18,14 @@ router.get("/active", auth, async (req, res) => {
       totalStages: 37,
     });
 
+    const normalStages = planet.stages.filter(s => !s.meta?.isMatchStage);
+    const completedStages = normalStages.filter(s => s.meta?.isCompleted).length;
+
     return res.json({
       planetId: planet.planetId,
-      stages: planet.stages.filter(s => !s.meta?.isMatchStage),
+      stages: normalStages,
       totalCoins: planet.totalCoins ?? 0,
+      playerLevel: completedStages + 1,
     });
   } catch (e) {
     console.error("GET ACTIVE PLANET ERROR:", e);
