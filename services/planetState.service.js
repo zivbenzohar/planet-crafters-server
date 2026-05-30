@@ -2,6 +2,7 @@ const Planet = require("../model/Planet_model");
 const HexTile = require("../model/HexTile_model");
 const { DIRS } = require("./planet.service");
 const { getTargetScore, getLevelFromStageId } = require("../config/stageConfig");
+const { evaluateAchievementEvents } = require("./achievement.service");
 
 function stageLevel(stage, stageId) {
   return stage.meta?.level ?? getLevelFromStageId(stageId);
@@ -182,12 +183,14 @@ function getAxialNeighbors(q, r) {
 async function placeTile({ userId, planetId, stageId, tileId, coord, rotation }) {
   const planet = await Planet.findOne(
     { userId, planetId, "stages.stageId": stageId },
-    { stages: { $elemMatch: { stageId } }, planetId: 1 }
+    { stages: { $elemMatch: { stageId } }, planetId: 1, totalCoins: 1 }
   ).lean();
 
   if (!planet || !planet.stages.length) throw new Error("Stage not found");
 
   const stage = planet.stages[0];
+  const isMatchStage = !!stage.meta?.isMatchStage;
+  const stageWasCompleted = !!stage.meta?.isCompleted;
   const state = stage.state;
   if (!state) throw new Error("Stage state not initialized. Load stage first.");
 
@@ -375,7 +378,8 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
   // Calculate progress
   const score = (state.progress?.score ?? 0) + newConnections + bonusPoints;
   const targetScore = getTargetScore(stageLevel(stage, stageId));
-  const isCompleted = !stage.meta?.isMatchStage && score >= targetScore;
+  const isCompleted = !isMatchStage && score >= targetScore;
+  const justCompleted = isCompleted && !stageWasCompleted;
   const developedPercent = Math.min(100, Math.round((score / targetScore) * 100));
 
   const newState = {
@@ -387,17 +391,20 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
 
   // Calculate coins awarded on completion
   const tilesRemaining = newHand.length + newDeck.length;
-  const coinsAwarded = isCompleted
+  const newlyAwardedStageCoins = justCompleted
     ? tilesRemaining >= 6 ? 3 : tilesRemaining >= 3 ? 2 : 1
+    : 0;
+  const coinsAwarded = isCompleted
+    ? (justCompleted ? newlyAwardedStageCoins : (stage.meta?.coinsAwarded ?? 0))
     : 0;
 
   const updateFields = {
     "stages.$.state": newState,
     "stages.$.meta.lastPlayedAt": new Date(),
   };
-  if (isCompleted) {
+  if (justCompleted) {
     updateFields["stages.$.meta.isCompleted"] = true;
-    updateFields["stages.$.meta.coinsAwarded"] = coinsAwarded;
+    updateFields["stages.$.meta.coinsAwarded"] = newlyAwardedStageCoins;
   }
 
   await Planet.updateOne(
@@ -406,15 +413,18 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
   );
 
   // On completion: add coins to planet total and unlock neighboring stages
-  if (isCompleted) {
-    await Planet.updateOne(
+  let totalCoins = planet.totalCoins ?? 0;
+  if (justCompleted) {
+    const updatedPlanet = await Planet.findOneAndUpdate(
       { userId, planetId },
-      { $inc: { totalCoins: coinsAwarded } }
-    );
+      { $inc: { totalCoins: newlyAwardedStageCoins } },
+      { new: true, projection: { totalCoins: 1 } }
+    ).lean();
+    totalCoins = updatedPlanet?.totalCoins ?? totalCoins + newlyAwardedStageCoins;
   }
 
   // On completion: unlock neighboring stages in the stage map
-  if (isCompleted) {
+  if (justCompleted) {
     const stageCoord = stage.meta?.coord;
     if (stageCoord) {
       const neighborCoordKeys = DIRS.map(d =>
@@ -444,6 +454,29 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
     }
   }
 
+  const achievementEvents = buildAchievementEvents({
+    isMatchStage,
+    justCompleted,
+    newPlacedTiles,
+    newConnections,
+    newTemplate,
+    score,
+    coinsAwarded,
+    planetCompleted: justCompleted
+      ? await isPlanetCompleted({ userId, planetId })
+      : false,
+  });
+
+  const achievementResult = await evaluateAchievementEvents({
+    userId,
+    planetId,
+    events: achievementEvents,
+  });
+
+  if (achievementResult.totalCoins !== null && achievementResult.totalCoins !== undefined) {
+    totalCoins = achievementResult.totalCoins;
+  }
+
   return {
     planetId,
     stageId,
@@ -453,9 +486,83 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
     progress: newState.progress,
     targetScore,
     coinsAwarded,
+    totalCoins,
+    achievementRewards: achievementResult.unlocked,
+    achievementCoinsAwarded: achievementResult.coinsAwarded,
     scoredConnections,
     bonusPoints,
   };
+}
+
+function buildAchievementEvents({
+  isMatchStage,
+  justCompleted,
+  newPlacedTiles,
+  newConnections,
+  newTemplate,
+  score,
+  coinsAwarded,
+  planetCompleted,
+}) {
+  const events = [];
+
+  if (isMatchStage) {
+    events.push({ metricKey: "multi.tiles_placed_total", mode: "inc", value: 1 });
+    return events;
+  }
+
+  events.push({ metricKey: "single.tiles_placed_total", mode: "inc", value: 1 });
+  events.push({
+    metricKey: "single.tiles_placed_in_level",
+    mode: "max",
+    value: newPlacedTiles.length,
+  });
+
+  if (newTemplate?.type) {
+    events.push({
+      metricKey: "single.tile_types_used",
+      mode: "unique",
+      uniqueValue: newTemplate.type,
+    });
+  }
+
+  if (newConnections > 0) {
+    events.push({
+      metricKey: "single.hex_matches_total",
+      mode: "inc",
+      value: newConnections,
+    });
+  }
+
+  if (justCompleted) {
+    events.push({ metricKey: "single.levels_completed", mode: "inc", value: 1 });
+    events.push({ metricKey: "single.score_in_level", mode: "max", value: score });
+
+    if (coinsAwarded >= 3) {
+      events.push({
+        metricKey: "single.level_completed_stars",
+        mode: "max",
+        value: coinsAwarded,
+      });
+      events.push({ metricKey: "single.three_star_levels", mode: "inc", value: 1 });
+    }
+
+    if (planetCompleted) {
+      events.push({ metricKey: "single.planets_completed", mode: "inc", value: 1 });
+    }
+  }
+
+  return events;
+}
+
+async function isPlanetCompleted({ userId, planetId }) {
+  const fullPlanet = await Planet.findOne(
+    { userId, planetId },
+    { "stages.stageId": 1, "stages.meta.isCompleted": 1, "stages.meta.isMatchStage": 1 }
+  ).lean();
+
+  const normalStages = (fullPlanet?.stages ?? []).filter(stage => !stage.meta?.isMatchStage);
+  return normalStages.length > 0 && normalStages.every(stage => !!stage.meta?.isCompleted);
 }
 
 module.exports = {

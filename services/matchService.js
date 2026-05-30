@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const Planet = require('../model/Planet_model');
 const { createDeckAndHand } = require('./planetState.service');
+const { evaluateAchievementEvents } = require('./achievement.service');
 
 const matches = {};
 
@@ -176,6 +177,10 @@ function _endMatch(match) {
     }
   }
 
+  recordFinishedMatchAchievements(match).catch(err =>
+    console.error('[Match] Achievement update error:', err)
+  );
+
   // Clean up temporary match stages from each player's planet
   if (match.matchStageId) {
     for (const player of match.players) {
@@ -184,6 +189,24 @@ function _endMatch(match) {
         { $pull: { stages: { stageId: match.matchStageId } } }
       ).catch(err => console.error('[Match] Cleanup stage error:', err));
     }
+  }
+}
+
+async function recordFinishedMatchAchievements(match) {
+  for (const player of match.players) {
+    const events = [
+      { metricKey: 'multi.matches_played', mode: 'inc', value: 1 },
+    ];
+
+    if (match.winnerId === player.userId) {
+      events.push({ metricKey: 'multi.matches_won', mode: 'inc', value: 1 });
+    }
+
+    await evaluateAchievementEvents({
+      userId: player.userId,
+      planetId: player.planetId,
+      events,
+    });
   }
 }
 
