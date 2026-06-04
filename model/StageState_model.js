@@ -76,6 +76,19 @@ const StageStateSchema = new mongoose.Schema(
       isCompleted: { type: Boolean, default: false },
       baseResourceConnections: { type: Number, default: 0 },
     },
+
+    lastPlacement: {
+      tileId: { type: String, default: null },
+      coord: {
+        q: { type: Number, default: null },
+        r: { type: Number, default: null },
+      },
+      rotation: { type: Number, default: 0 },
+      scoreGained: { type: Number, default: 0 },
+      bonusGained: { type: Number, default: 0 },
+      baseConnectionsGained: { type: Number, default: 0 },
+      drawnTileId: { type: String, default: null },
+    },
   },
   { _id: false }
 );

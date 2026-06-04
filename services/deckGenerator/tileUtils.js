@@ -46,16 +46,6 @@ function weightedPick(arr, weights) {
 }
 
 /**
- * Build a plain random pick (equal weight) helper.
- *
- * @param {any[]} arr
- * @returns {any}
- */
-function randomPick(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-/**
  * Generate an initial candidate deck of `size` tiles drawn (with replacement)
  * from `tilePool`, ordered in three difficulty-ascending sections:
  *
@@ -134,4 +124,4 @@ function generateInitialDeck(size, tilePool, stageTheme = {}, stageLevel = 3) {
   return deck;
 }
 
-module.exports = { getTileWeight, weightedPick, randomPick, generateInitialDeck };
+module.exports = { getTileWeight, weightedPick, generateInitialDeck };

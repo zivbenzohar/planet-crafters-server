@@ -92,6 +92,10 @@ async function joinMatch(code, userId, planetId, stageId) {
   return match;
 }
 
+function getMatchRaw(matchId) {
+  return matches[matchId] ?? null;
+}
+
 function getMatch(matchId) {
   const match = matches[matchId];
   if (!match) throw new Error('Match not found');
@@ -215,11 +219,50 @@ setInterval(() => {
   const now = Date.now();
   for (const [key, value] of Object.entries(matches)) {
     if (key.startsWith('code:')) continue;
-    if (value.status === 'finished' && now - (value.startTime || now) > 10 * 60 * 1000) {
+    if (value.status === 'finished' && now - (value.startTime || (now - 11 * 60 * 1000)) > 10 * 60 * 1000) {
       delete matches[`code:${value.code}`];
       delete matches[key];
     }
   }
 }, 60 * 1000);
 
-module.exports = { createMatch, joinMatch, getMatch, playerReady, updateScore, submitFinalScore };
+async function createMatchForTwo(player1, player2, duration = 180) {
+  const matchId = generateId();
+  const code = generateCode();
+  const matchStageId = `match_${matchId}`;
+
+  const match = {
+    matchId, code, status: 'active',
+    duration, startTime: null, matchStageId,
+    players: [
+      { userId: player1.userId, username: player1.username || player1.userId, planetId: player1.planetId, stageId: player1.stageId, score: 0, finished: false, ready: false },
+      { userId: player2.userId, username: player2.username || player2.userId, planetId: player2.planetId, stageId: player2.stageId, score: 0, finished: false, ready: false },
+    ],
+    winnerId: undefined,
+  };
+
+  matches[matchId] = match;
+  matches[`code:${code}`] = matchId;
+
+  const { hand, deck } = await createDeckAndHand(30, 3, { level: 1 });
+  const sharedState = {
+    map: { placedTiles: [] }, hand, deck,
+    progress: { developedPercent: 0, score: 0, isCompleted: false },
+  };
+
+  for (const player of match.players) {
+    await Planet.updateOne(
+      { userId: player.userId, planetId: player.planetId, 'stages.stageId': { $ne: matchStageId } },
+      { $push: { stages: { stageId: matchStageId, meta: { coord: { q: 0, r: 0 }, level: 1, resourceType: 'terra', isUnlocked: true, isStarted: false, isCompleted: false, isMatchStage: true }, state: sharedState } } }
+    );
+  }
+
+  return match;
+}
+
+function forceEndMatch(matchId) {
+  const match = matches[matchId];
+  if (match) _endMatch(match);
+}
+
+module.exports = { createMatch, joinMatch, getMatch, getMatchRaw, playerReady, updateScore, submitFinalScore, createMatchForTwo, forceEndMatch };

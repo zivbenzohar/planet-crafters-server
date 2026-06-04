@@ -3,6 +3,7 @@ const HexTile = require("../model/HexTile_model");
 const { DIRS } = require("./planet.service");
 const { getTargetScore, getLevelFromStageId } = require("../config/stageConfig");
 const { evaluateAchievementEvents } = require("./achievement.service");
+const { consumeBooster } = require("./booster.service");
 
 function stageLevel(stage, stageId) {
   return stage.meta?.level ?? getLevelFromStageId(stageId);
@@ -73,7 +74,14 @@ async function getStageState({ userId, planetId, stageId, deckSize }) {
     Array.isArray(state.deck.remainingTiles) &&
     state.deck.remainingTiles.length > 0;
 
-  if (!hasDeck) {
+  const hasHand =
+    state.hand &&
+    Array.isArray(state.hand.tilesInHand) &&
+    state.hand.tilesInHand.length > 0;
+
+  const isAlreadyStarted = stage.meta?.isStarted === true;
+
+  if (!hasDeck && !hasHand && !isAlreadyStarted) {
     const { hand, deck } = await createDeckAndHand(deckSize, 3, { level, targetScore });
 
     state = { ...state, hand, deck };
@@ -180,7 +188,7 @@ function getAxialNeighbors(q, r) {
   ];
 }
 
-async function placeTile({ userId, planetId, stageId, tileId, coord, rotation }) {
+async function placeTile({ userId, planetId, stageId, tileId, coord, rotation, activeBooster }) {
   const planet = await Planet.findOne(
     { userId, planetId, "stages.stageId": stageId },
     { stages: { $elemMatch: { stageId } }, planetId: 1, totalCoins: 1 }
@@ -226,9 +234,10 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
 
   // Draw from deck if available
   const newDeck = [...deck];
+  let drawnTileId = null;
   if (newDeck.length > 0) {
-    const drawn = newDeck.shift();
-    newHand.push(drawn);
+    drawnTileId = newDeck.shift();
+    newHand.push(drawnTileId);
   }
 
   // Add tile to map
@@ -302,7 +311,9 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
   }
 
   const totalBaseConnections = prevBaseConnections + baseConnectionsGained;
-  const bonusPoints = Math.floor(totalBaseConnections / 5) - Math.floor(prevBaseConnections / 5);
+  const bonusPoints = stage.meta?.isMatchStage
+    ? 0
+    : Math.floor(totalBaseConnections / 5) - Math.floor(prevBaseConnections / 5);
 
 
   // Count connections within the cluster reachable from the new tile for a given resource.
@@ -359,6 +370,64 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
   const levelFor = resource =>
     Math.min(3, 1 + Math.floor(countClusterConnections(resource) / 5));
 
+  // Find connected components of tiles sharing a resource edge (for roaming animations)
+  function findResourceClusters(tiles, resource, minSize) {
+    const n = tiles.length;
+    const cMap = new Map(tiles.map((t, i) => [`${t.coord.q},${t.coord.r}`, i]));
+    const adj = Array.from({ length: n }, () => []);
+    for (let i = 0; i < n; i++) {
+      const tile = tiles[i];
+      const tmpl = templateMap.get(tile.tileId);
+      if (!tmpl) continue;
+      for (let dir = 0; dir < 6; dir++) {
+        const { dq, dr } = EDGE_DIRS[dir];
+        const j = cMap.get(`${tile.coord.q + dq},${tile.coord.r + dr}`);
+        if (j === undefined || j <= i) continue;
+        const nb = tiles[j];
+        const nbTmpl = templateMap.get(nb.tileId);
+        if (!nbTmpl) continue;
+        const fA = tmpl.edges[(dir - tile.rotation + 9) % 6];
+        const oppDir = (dir + 3) % 6;
+        const fB = nbTmpl.edges[(oppDir - nb.rotation + 9) % 6];
+        if (fA === resource && fA === fB) { adj[i].push(j); adj[j].push(i); }
+      }
+    }
+    const visited = new Set();
+    const clusters = [];
+    for (let start = 0; start < n; start++) {
+      if (visited.has(start)) continue;
+      const stack = [start];
+      const component = [];
+      while (stack.length > 0) {
+        const curr = stack.pop();
+        if (visited.has(curr)) continue;
+        visited.add(curr);
+        component.push(curr);
+        for (const next of adj[curr]) stack.push(next);
+      }
+      if (component.length >= minSize)
+        clusters.push(component.map(i => tiles[i].coord));
+    }
+    return clusters;
+  }
+
+  const allResourceTypes = new Set();
+  for (const tile of newPlacedTiles) {
+    const tmpl = templateMap.get(tile.tileId);
+    if (tmpl) tmpl.edges.forEach(e => e && allResourceTypes.add(e));
+  }
+  const claimedCoords = new Set();
+  const roamingClusters = [];
+  for (const resource of allResourceTypes) {
+    for (const coords of findResourceClusters(newPlacedTiles, resource, 10)) {
+      const key = c => `${c.q},${c.r}`;
+      const unique = coords.filter(c => !claimedCoords.has(key(c)));
+      if (unique.length < 10) continue;
+      unique.forEach(c => claimedCoords.add(key(c)));
+      roamingClusters.push({ coords: unique, size: unique.length, resourceType: resource });
+    }
+  }
+
   // faces[i] = the resource at model Face0i. The material on face i is always edges[i]
   // regardless of rotation (the whole tile rotates, face materials stay attached).
   const tileFaces = newTemplate
@@ -375,18 +444,37 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
     faces: tileFaces,
   };
 
+  // Apply doubleScore booster
+  const useDoubleScore = activeBooster === "doubleScore";
+  if (useDoubleScore) {
+    await consumeBooster(userId, "doubleScore");
+  }
+  const scoreMultiplier = useDoubleScore ? 2 : 1;
+  const scoreGained = (newConnections + bonusPoints) * scoreMultiplier;
+
   // Calculate progress
-  const score = (state.progress?.score ?? 0) + newConnections + bonusPoints;
+  const score = (state.progress?.score ?? 0) + scoreGained;
   const targetScore = getTargetScore(stageLevel(stage, stageId));
   const isCompleted = !isMatchStage && score >= targetScore;
   const justCompleted = isCompleted && !stageWasCompleted;
   const developedPercent = Math.min(100, Math.round((score / targetScore) * 100));
+
+  const lastPlacement = {
+    tileId,
+    coord: { q, r },
+    rotation: rot,
+    scoreGained,
+    bonusGained: bonusPoints * scoreMultiplier,
+    baseConnectionsGained,
+    drawnTileId,
+  };
 
   const newState = {
     map: { placedTiles: newPlacedTiles },
     hand: { maxHandSize: state.hand?.maxHandSize ?? 3, tilesInHand: newHand },
     deck: { remainingTiles: newDeck },
     progress: { developedPercent, score, isCompleted, baseResourceConnections: totalBaseConnections },
+    lastPlacement: isCompleted ? null : lastPlacement,
   };
 
   // Calculate coins awarded on completion
@@ -490,7 +578,121 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation })
     achievementRewards: achievementResult.unlocked,
     achievementCoinsAwarded: achievementResult.coinsAwarded,
     scoredConnections,
-    bonusPoints,
+    bonusPoints: bonusPoints * scoreMultiplier,
+    roamingClusters,
+    doubleScoreUsed: useDoubleScore,
+  };
+}
+
+async function cancelLastTile({ userId, planetId, stageId }) {
+  const planet = await Planet.findOne(
+    { userId, planetId, "stages.stageId": stageId },
+    { stages: { $elemMatch: { stageId } }, planetId: 1 }
+  ).lean();
+
+  if (!planet || !planet.stages.length) throw new Error("Stage not found");
+
+  const stage = planet.stages[0];
+  const state = stage.state;
+  if (!state) throw new Error("Stage state not initialized");
+
+  const last = state.lastPlacement;
+  if (!last || !last.tileId) throw new Error("No placement to cancel");
+  if (state.progress?.isCompleted) throw new Error("Cannot undo a completed stage");
+
+  await consumeBooster(userId, "cancelPlacement");
+
+  const placedTiles = state.map?.placedTiles ?? [];
+  const restoredTiles = placedTiles.filter(
+    t => !(t.coord.q === last.coord.q && t.coord.r === last.coord.r)
+  );
+
+  // Restore drawn tile to front of deck, restore placed tile to front of hand
+  const restoredDeck = last.drawnTileId
+    ? [last.drawnTileId, ...(state.deck?.remainingTiles ?? [])]
+    : [...(state.deck?.remainingTiles ?? [])];
+
+  const currentHand = state.hand?.tilesInHand ?? [];
+  const handWithoutDrawn = last.drawnTileId
+    ? currentHand.filter(id => id !== last.drawnTileId)
+    : [...currentHand];
+  const restoredHand = [last.tileId, ...handWithoutDrawn];
+
+  const prevScore = state.progress?.score ?? 0;
+  const newScore = Math.max(0, prevScore - last.scoreGained);
+  const prevBase = state.progress?.baseResourceConnections ?? 0;
+  const newBase = Math.max(0, prevBase - last.baseConnectionsGained);
+  const targetScore = getTargetScore(stageLevel(stage, stageId));
+  const developedPercent = Math.min(100, Math.round((newScore / targetScore) * 100));
+
+  const newState = {
+    map: { placedTiles: restoredTiles },
+    hand: { maxHandSize: state.hand?.maxHandSize ?? 3, tilesInHand: restoredHand },
+    deck: { remainingTiles: restoredDeck },
+    progress: { developedPercent, score: newScore, isCompleted: false, baseResourceConnections: newBase },
+    lastPlacement: null,
+  };
+
+  await Planet.updateOne(
+    { userId, planetId, "stages.stageId": stageId },
+    { $set: { "stages.$.state": newState, "stages.$.meta.lastPlayedAt": new Date() } }
+  );
+
+  return {
+    planetId,
+    stageId,
+    map: newState.map,
+    hand: newState.hand,
+    deck: newState.deck,
+    progress: newState.progress,
+    targetScore,
+  };
+}
+
+async function addHexToHand({ userId, planetId, stageId }) {
+  const planet = await Planet.findOne(
+    { userId, planetId, "stages.stageId": stageId },
+    { stages: { $elemMatch: { stageId } }, planetId: 1 }
+  ).lean();
+
+  if (!planet || !planet.stages.length) throw new Error("Stage not found");
+
+  const stage = planet.stages[0];
+  const state = stage.state;
+  if (!state) throw new Error("Stage state not initialized");
+
+  await consumeBooster(userId, "addHex");
+
+  // Pick a random tile from the full catalog (new tile, not from existing deck)
+  const allTiles = await HexTile.find({}, { _id: 1 }).lean();
+  if (!allTiles.length) throw new Error("No HexTile templates found");
+  const randomTile = allTiles[Math.floor(Math.random() * allTiles.length)];
+  const newTileId = String(randomTile._id);
+
+  const newHand = [newTileId, ...(state.hand?.tilesInHand ?? [])];
+  const newDeck = state.deck?.remainingTiles ?? [];
+
+  const newState = {
+    ...state,
+    hand: { maxHandSize: state.hand?.maxHandSize ?? 3, tilesInHand: newHand },
+    deck: { remainingTiles: newDeck },
+  };
+
+  await Planet.updateOne(
+    { userId, planetId, "stages.stageId": stageId },
+    { $set: { "stages.$.state": newState, "stages.$.meta.lastPlayedAt": new Date() } }
+  );
+
+  const targetScore = getTargetScore(stageLevel(stage, stageId));
+
+  return {
+    planetId,
+    stageId,
+    map: newState.map,
+    hand: newState.hand,
+    deck: newState.deck,
+    progress: newState.progress,
+    targetScore,
   };
 }
 
@@ -571,4 +773,6 @@ module.exports = {
   resetStageState,
   placeTile,
   createDeckAndHand,
+  cancelLastTile,
+  addHexToHand,
 };

@@ -65,10 +65,7 @@ router.post('/:matchId/score', auth, (req, res) => {
   try {
     const userId = String(req.user.id);
     const { score } = req.body;
-
-    console.log(`[Match] score update — matchId=${req.params.matchId} userId=${userId} score=${score}`);
     const match = matchService.updateScore(req.params.matchId, userId, score ?? 0);
-    console.log(`[Match] scores now — ${match.players.map(p => `${p.userId.slice(-4)}:${p.score}`).join(' | ')}`);
     res.json(match);
   } catch (e) {
     res.status(400).json({ msg: e.message });

@@ -5,8 +5,7 @@ const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
 
-const soloSocket = require('./src/sockets/soloSocket');
-const coopSocket = require('./src/sockets/coopSocket');
+const vsSocket = require('./src/sockets/vsSocket');
 
 const connectDB = require('./config/db');
 
@@ -32,9 +31,7 @@ app.get('/ping', (req, res) => {
   res.json({ message: 'pong from main server' });
 });
 
-// Pass io to both game modules
-soloSocket(io);
-coopSocket(io);
+vsSocket(io);
 
 connectDB();
 

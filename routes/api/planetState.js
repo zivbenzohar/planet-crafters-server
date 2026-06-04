@@ -8,6 +8,8 @@ const {
   saveStageState,
   resetStageState,
   placeTile,
+  cancelLastTile,
+  addHexToHand,
 } = require("../../services/planetState.service");
 
 // GET stage state (with creation if needed)
@@ -82,17 +84,47 @@ router.post("/:planetId/:stageId/place-tile", auth, async (req, res) => {
   try {
     const { planetId, stageId } = req.params;
     const userId = String(req.user.id);
-    const { tileId, coord, rotation } = req.body;
+    const { tileId, coord, rotation, activeBooster } = req.body;
 
     if (!tileId || !coord || rotation === undefined) {
       return res.status(400).json({ msg: "tileId, coord, and rotation are required" });
     }
 
-    const result = await placeTile({ userId, planetId, stageId, tileId, coord, rotation });
+    const result = await placeTile({ userId, planetId, stageId, tileId, coord, rotation, activeBooster });
     return res.json(result);
   } catch (e) {
     console.error("PLACE-TILE error:", e);
-    const clientErrors = ["not found", "not adjacent", "occupied", "slot 0", "(0,0)", "not initialized"];
+    const clientErrors = ["not found", "not adjacent", "occupied", "slot 0", "(0,0)", "not initialized", "No doubleScore"];
+    const isClientError = clientErrors.some(msg => e.message.includes(msg));
+    return res.status(isClientError ? 400 : 500).json({ msg: e.message });
+  }
+});
+
+// POST cancel last tile placement (booster: cancelPlacement)
+router.post("/:planetId/:stageId/cancel-tile", auth, async (req, res) => {
+  try {
+    const { planetId, stageId } = req.params;
+    const userId = String(req.user.id);
+    const result = await cancelLastTile({ userId, planetId, stageId });
+    return res.json(result);
+  } catch (e) {
+    console.error("CANCEL-TILE error:", e);
+    const clientErrors = ["No placement to cancel", "Cannot undo", "No cancelPlacement", "not found", "not initialized"];
+    const isClientError = clientErrors.some(msg => e.message.includes(msg));
+    return res.status(isClientError ? 400 : 500).json({ msg: e.message });
+  }
+});
+
+// POST add hex tile to hand from deck (booster: addHex)
+router.post("/:planetId/:stageId/add-hex", auth, async (req, res) => {
+  try {
+    const { planetId, stageId } = req.params;
+    const userId = String(req.user.id);
+    const result = await addHexToHand({ userId, planetId, stageId });
+    return res.json(result);
+  } catch (e) {
+    console.error("ADD-HEX error:", e);
+    const clientErrors = ["No tiles left", "No addHex", "not found", "not initialized"];
     const isClientError = clientErrors.some(msg => e.message.includes(msg));
     return res.status(isClientError ? 400 : 500).json({ msg: e.message });
   }

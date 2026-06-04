@@ -139,16 +139,7 @@ async function getOrCreateActivePlanet({
 }
 
 module.exports = {
-  // main
   getOrCreateActivePlanet,
-
-  // optional exports (if you want to use these elsewhere)
   createInitialStagesWithCoords,
-  emptyStageState,
-
-  // hex helpers (only if you want to use them later)
-  axialRing,
-  add,
-  scale,
   DIRS,
 };
