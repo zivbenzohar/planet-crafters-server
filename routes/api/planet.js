@@ -33,4 +33,28 @@ router.get("/active", auth, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/planets/:planetId/add-coins
+ */
+router.post("/:planetId/add-coins", auth, async (req, res) => {
+  try {
+    const userId = String(req.user.id);
+    const { planetId } = req.params;
+    const { amount } = req.body;
+
+    if (!amount || amount <= 0)
+      return res.status(400).json({ msg: "amount must be positive" });
+
+    const Planet = require("../../model/Planet_model");
+    await Planet.updateOne({ userId, planetId }, { $inc: { totalCoins: amount } });
+    const planet = await Planet.findOne({ userId, planetId }, { totalCoins: 1 }).lean();
+
+    console.log(`[Coins] +${amount} → user ${userId} planet ${planetId} | total: ${planet.totalCoins}`);
+    return res.json({ totalCoins: planet.totalCoins });
+  } catch (e) {
+    console.error("ADD-COINS error:", e);
+    return res.status(500).json({ msg: e.message });
+  }
+});
+
 module.exports = router;

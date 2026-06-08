@@ -137,6 +137,7 @@ router.post("/", async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        userName: user.userName,
       },
     });
   } catch (err) {

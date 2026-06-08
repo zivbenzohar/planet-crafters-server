@@ -40,6 +40,12 @@ const UserSchema = new mongoose.Schema(
       index: true,
     },
 
+    boosters: {
+      doubleScore: { type: Number, default: 0 },
+      cancelPlacement: { type: Number, default: 0 },
+      addHex: { type: Number, default: 0 },
+    },
+
     createdAt: {
       type: Date,
       default: Date.now,
