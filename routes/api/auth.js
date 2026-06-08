@@ -1,9 +1,13 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const { OAuth2Client } = require("google-auth-library");
 const router = express.Router();
 
 const auth = require("../../middleware/auth");
 const User = require("../../model/User_model");
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 /**
  * POST /api/auth
@@ -55,6 +59,7 @@ router.post("/", async (req, res) => {
         name: user.name,
         email: user.email,
         userName: user.userName,
+        selectedAvatar: user.selectedAvatar,
       },
     });
   } catch (err) {
@@ -106,6 +111,77 @@ router.post("/refresh", async (req, res) => {
     return res.json({ accessToken: newAccessToken });
   } catch (err) {
     return res.status(401).json({ msg: "Invalid refresh token" });
+  }
+});
+
+/**
+ * POST /api/auth/google
+ * Verifies a Google IdToken and returns JWT tokens.
+ * Creates a new user if one doesn't exist for this Google account.
+ */
+router.post("/google", async (req, res) => {
+  const { idToken } = req.body;
+
+  if (!idToken) return res.status(400).json({ msg: "Missing idToken" });
+
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { email, name } = payload;
+
+    if (!email) return res.status(400).json({ msg: "Google account has no email" });
+
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      const baseUserName = email.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "_");
+      const existingName = await User.findOne({ userName: baseUserName });
+      const userName = existingName
+        ? `${baseUserName}_${Date.now().toString(36)}`
+        : baseUserName;
+
+      user = new User({
+        name: name || userName,
+        userName,
+        email,
+        password: crypto.randomBytes(32).toString("hex"),
+      });
+      await user.save();
+    }
+
+    const accessToken = jwt.sign(
+      { id: user.id },
+      process.env.JWT_ACCESS_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    const refreshToken = jwt.sign(
+      { id: user.id },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    return res.json({
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        userName: user.userName,
+        selectedAvatar: user.selectedAvatar,
+      },
+    });
+  } catch (err) {
+    console.error("[Google Auth]", err.message);
+    return res.status(401).json({ msg: "Invalid Google token" });
   }
 });
 

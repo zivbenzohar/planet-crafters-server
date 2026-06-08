@@ -18,6 +18,9 @@ router.get("/me", auth, async (req, res) => {
       name: user.name,
       userName: user.userName,
       email: user.email,
+      coins: user.coins ?? 0,
+      selectedAvatar: user.selectedAvatar ?? "avatar",
+      ownedAvatars: user.ownedAvatars ?? ["avatar"],
     });
   } catch (err) {
     console.error(err);
