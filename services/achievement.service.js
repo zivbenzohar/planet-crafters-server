@@ -1,6 +1,20 @@
 const Achievement = require("../model/Achievement_model");
 const UserAchievement = require("../model/UserAchievement_model");
-const Planet = require("../model/Planet_model");
+const User = require("../model/User_model");
+
+// In-memory cache for achievement definitions (static config, never changes at runtime)
+const _defCache = new Map(); // metricKey → Definition[]
+let _defCacheReady = false;
+
+async function _warmDefinitionCache() {
+  if (_defCacheReady) return;
+  const defs = await Achievement.find({ isActive: true }).lean();
+  for (const d of defs) {
+    if (!_defCache.has(d.metricKey)) _defCache.set(d.metricKey, []);
+    _defCache.get(d.metricKey).push(d);
+  }
+  _defCacheReady = true;
+}
 
 async function getAchievementsForUser(userId) {
   const [definitions, progressRows] = await Promise.all([
@@ -32,48 +46,76 @@ async function evaluateAchievementEvents({ userId, planetId, events = [] }) {
   const result = {
     unlocked: [],
     coinsAwarded: 0,
-    totalCoins: null,
+    userCoins: null,
   };
 
   if (!userId || !Array.isArray(events) || events.length === 0) {
     return result;
   }
 
-  for (const event of events) {
-    if (!event?.metricKey) continue;
+  const validEvents = events.filter(e => e?.metricKey);
+  if (validEvents.length === 0) return result;
 
-    const definitions = await Achievement.find({
-      metricKey: event.metricKey,
-      isActive: true,
-    }).lean();
+  // Use cached achievement definitions (avoids a DB query on every tile placement)
+  await _warmDefinitionCache();
+  const metricKeys = [...new Set(validEvents.map(e => e.metricKey))];
+  const allDefinitions = metricKeys.flatMap(k => _defCache.get(k) ?? []);
 
+  if (allDefinitions.length === 0) return result;
+
+  // Single query for all existing user achievement records
+  const achievementIds = allDefinitions.map(d => d.achievementId);
+  const existingStates = await UserAchievement.find({
+    userId,
+    achievementId: { $in: achievementIds },
+  });
+
+  const stateMap = new Map(existingStates.map(s => [s.achievementId, s]));
+
+  // Group definitions by metricKey for fast lookup
+  const definitionsByKey = new Map();
+  for (const def of allDefinitions) {
+    if (!definitionsByKey.has(def.metricKey)) definitionsByKey.set(def.metricKey, []);
+    definitionsByKey.get(def.metricKey).push(def);
+  }
+
+  // Process all events in memory
+  const statesToSave = [];
+  let totalCoinsToAward = 0;
+
+  for (const event of validEvents) {
+    const definitions = definitionsByKey.get(event.metricKey) ?? [];
     for (const definition of definitions) {
-      const state = await getOrCreateUserAchievement(userId, definition);
+      let state = stateMap.get(definition.achievementId);
+      if (!state) {
+        state = new UserAchievement({
+          userId,
+          achievementId: definition.achievementId,
+          rewardType: definition.rewardType,
+          rewardAmount: definition.rewardAmount,
+        });
+        stateMap.set(definition.achievementId, state);
+      }
+
       const previousProgress = state.progress ?? 0;
       const nextProgress = calculateNextProgress(state, definition, event);
-
       if (nextProgress !== previousProgress) {
         state.progress = nextProgress;
       }
 
       const justCompleted = !state.completed && state.progress >= definition.targetValue;
-
       if (justCompleted) {
         state.completed = true;
         state.completedAt = new Date();
         state.rewardType = definition.rewardType;
         state.rewardAmount = definition.rewardAmount;
 
-        const coinReward = await grantSupportedReward({
-          userId,
-          planetId,
-          achievement: definition,
-          userAchievement: state,
-        });
-
-        if (coinReward.coinsAwarded > 0) {
-          result.coinsAwarded += coinReward.coinsAwarded;
-          result.totalCoins = coinReward.totalCoins;
+        const rewardType = String(definition.rewardType || "").toLowerCase();
+        const rewardAmount = Number(definition.rewardAmount || 0);
+        if (rewardType === "coins" && rewardAmount > 0 && !state.rewardGranted) {
+          totalCoinsToAward += rewardAmount;
+          state.rewardGranted = true;
+          state.rewardGrantedAt = new Date();
         }
 
         result.unlocked.push({
@@ -85,9 +127,23 @@ async function evaluateAchievementEvents({ userId, planetId, events = [] }) {
         });
       }
 
-      await state.save();
+      if (!statesToSave.includes(state)) statesToSave.push(state);
     }
   }
+
+  // Single coin update if any rewards earned
+  if (totalCoinsToAward > 0) {
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: userId },
+      { $inc: { coins: totalCoinsToAward } },
+      { new: true, projection: { coins: 1 } }
+    ).lean();
+    result.coinsAwarded = totalCoinsToAward;
+    result.userCoins = updatedUser?.coins ?? null;
+  }
+
+  // Parallel saves
+  await Promise.all(statesToSave.map(s => s.save()));
 
   return result;
 }
@@ -134,20 +190,20 @@ function calculateNextProgress(state, definition, event) {
 
 async function grantSupportedReward({ userId, planetId, achievement, userAchievement }) {
   if (userAchievement.rewardGranted) {
-    return { coinsAwarded: 0, totalCoins: null };
+    return { coinsAwarded: 0, userCoins: null };
   }
 
   const rewardType = String(achievement.rewardType || "").toLowerCase();
   const rewardAmount = Number(achievement.rewardAmount || 0);
 
-  if (rewardType !== "coins" || rewardAmount <= 0 || !planetId) {
-    return { coinsAwarded: 0, totalCoins: null };
+  if (rewardType !== "coins" || rewardAmount <= 0) {
+    return { coinsAwarded: 0, userCoins: null };
   }
 
-  const updatedPlanet = await Planet.findOneAndUpdate(
-    { userId, planetId },
-    { $inc: { totalCoins: rewardAmount } },
-    { new: true, projection: { totalCoins: 1 } }
+  const updatedUser = await User.findOneAndUpdate(
+    { _id: userId },
+    { $inc: { coins: rewardAmount } },
+    { new: true, projection: { coins: 1 } }
   ).lean();
 
   userAchievement.rewardGranted = true;
@@ -155,7 +211,7 @@ async function grantSupportedReward({ userId, planetId, achievement, userAchieve
 
   return {
     coinsAwarded: rewardAmount,
-    totalCoins: updatedPlanet?.totalCoins ?? null,
+    userCoins: updatedUser?.coins ?? null,
   };
 }
 

@@ -46,6 +46,36 @@ const UserSchema = new mongoose.Schema(
       addHex: { type: Number, default: 0 },
     },
 
+    coins: {
+      type: Number,
+      default: 0,
+    },
+
+    selectedAvatar: {
+      type: String,
+      default: "avatar",
+    },
+
+    ownedAvatars: {
+      type: [String],
+      default: ["avatar"],
+    },
+
+    lastWheelSpin: {
+      type: Date,
+      default: null,
+    },
+
+    spinCredits: {
+      type: Number,
+      default: 2,
+    },
+
+    lastSpinAccrual: {
+      type: Date,
+      default: null,
+    },
+
     createdAt: {
       type: Date,
       default: Date.now,

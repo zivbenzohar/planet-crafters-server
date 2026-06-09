@@ -1,12 +1,26 @@
 const Planet = require("../model/Planet_model");
+const User   = require("../model/User_model");
 const HexTile = require("../model/HexTile_model");
 const { DIRS } = require("./planet.service");
 const { getTargetScore, getLevelFromStageId } = require("../config/stageConfig");
 const { evaluateAchievementEvents } = require("./achievement.service");
 const { consumeBooster } = require("./booster.service");
+const { AVATAR_CATALOG } = require("../config/avatarCatalog");
 
 function stageLevel(stage, stageId) {
   return stage.meta?.level ?? getLevelFromStageId(stageId);
+}
+
+// In-memory cache for HexTile templates (static data, never changes at runtime)
+const _tileTemplateCache = new Map();
+
+async function getTileTemplates(tileIds) {
+  const missing = tileIds.filter(id => !_tileTemplateCache.has(id));
+  if (missing.length > 0) {
+    const fetched = await HexTile.find({ _id: { $in: missing } }, { edges: 1, type: 1 }).lean();
+    for (const t of fetched) _tileTemplateCache.set(String(t._id), t);
+  }
+  return new Map(tileIds.map(id => [id, _tileTemplateCache.get(id)]));
 }
 const { generateStageDeck } = require("./deckGenerator");
 
@@ -191,7 +205,7 @@ function getAxialNeighbors(q, r) {
 async function placeTile({ userId, planetId, stageId, tileId, coord, rotation, activeBooster }) {
   const planet = await Planet.findOne(
     { userId, planetId, "stages.stageId": stageId },
-    { stages: { $elemMatch: { stageId } }, planetId: 1, totalCoins: 1 }
+    { stages: { $elemMatch: { stageId } }, planetId: 1 }
   ).lean();
 
   if (!planet || !planet.stages.length) throw new Error("Stage not found");
@@ -253,11 +267,8 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation, a
   ];
 
   // Fetch ALL placed tile templates (needed for cluster analysis)
-  const allTileIds = new Set([tileId]);
-  for (const tile of placedTiles) allTileIds.add(tile.tileId);
-
-  const rawTemplates = await HexTile.find({ _id: { $in: [...allTileIds] } }, { edges: 1, type: 1 }).lean();
-  const templateMap = new Map(rawTemplates.map(t => [String(t._id), t]));
+  const allTileIds = [tileId, ...placedTiles.map(t => t.tileId)];
+  const templateMap = await getTileTemplates(allTileIds);
 
   // Build coord→index map for fast lookup
   const coordMap = new Map();
@@ -495,74 +506,124 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation, a
     updateFields["stages.$.meta.coinsAwarded"] = newlyAwardedStageCoins;
   }
 
-  await Planet.updateOne(
-    { userId, planetId, "stages.stageId": stageId },
-    { $set: updateFields }
-  );
+  // ── Normal tile: parallel save + achievement evaluation ──────────────────
+  // For non-completion placements these two are completely independent.
+  // For completion we need the coins/unlock results before we can return,
+  // so we do a tailored parallel strategy below.
 
-  // On completion: add coins to planet total and unlock neighboring stages
-  let totalCoins = planet.totalCoins ?? 0;
-  if (justCompleted) {
-    const updatedPlanet = await Planet.findOneAndUpdate(
-      { userId, planetId },
-      { $inc: { totalCoins: newlyAwardedStageCoins } },
-      { new: true, projection: { totalCoins: 1 } }
-    ).lean();
-    totalCoins = updatedPlanet?.totalCoins ?? totalCoins + newlyAwardedStageCoins;
-  }
+  let userCoins = null;
+  let achievementResult;
 
-  // On completion: unlock neighboring stages in the stage map
-  if (justCompleted) {
+  if (!justCompleted) {
+    // Build events synchronously (no awaits needed when not completing)
+    const achievementEvents = buildAchievementEvents({
+      isMatchStage,
+      justCompleted: false,
+      newPlacedTiles,
+      newConnections,
+      newTemplate,
+      score,
+      coinsAwarded,
+      planetCompleted: false,
+    });
+
+    // Save state and evaluate achievements in parallel
+    [, achievementResult] = await Promise.all([
+      Planet.updateOne(
+        { userId, planetId, "stages.stageId": stageId },
+        { $set: updateFields }
+      ),
+      evaluateAchievementEvents({ userId, planetId, events: achievementEvents }),
+    ]);
+  } else {
+    // ── Completion path ───────────────────────────────────────────────────
     const stageCoord = stage.meta?.coord;
-    if (stageCoord) {
-      const neighborCoordKeys = DIRS.map(d =>
-        `${stageCoord.q + d.q}_${stageCoord.r + d.r}`
-      );
+    const neighborCoordKeys = stageCoord
+      ? DIRS.map(d => `${stageCoord.q + d.q}_${stageCoord.r + d.r}`)
+      : [];
 
-      const fullPlanet = await Planet.findOne(
+    // Batch 1: save state + add coins + fetch planet for neighbor/avatar data
+    // (all independent of each other)
+    const [, updatedUser, fullPlanet] = await Promise.all([
+      Planet.updateOne(
+        { userId, planetId, "stages.stageId": stageId },
+        { $set: updateFields }
+      ),
+      User.findOneAndUpdate(
+        { _id: userId },
+        { $inc: { coins: newlyAwardedStageCoins } },
+        { new: true, projection: { coins: 1 } }
+      ).lean(),
+      Planet.findOne(
         { userId, planetId },
-        { "stages.stageId": 1, "stages.meta.coord": 1, "stages.meta.isUnlocked": 1 }
-      ).lean();
+        {
+          "stages.stageId": 1,
+          "stages.meta.coord": 1,
+          "stages.meta.isUnlocked": 1,
+          "stages.meta.isCompleted": 1,
+          "stages.meta.isMatchStage": 1,
+        }
+      ).lean(),
+    ]);
 
-      const stagesToUnlock = (fullPlanet?.stages ?? [])
-        .filter(s =>
-          s.meta?.coord &&
-          neighborCoordKeys.includes(`${s.meta.coord.q}_${s.meta.coord.r}`) &&
-          !s.meta.isUnlocked
-        )
-        .map(s => s.stageId);
+    userCoins = updatedUser?.coins ?? null;
 
-      if (stagesToUnlock.length > 0) {
-        await Planet.updateOne(
+    // Derive neighbor unlock list and avatar grant from the single planet fetch
+    const stagesToUnlock = stageCoord
+      ? (fullPlanet?.stages ?? [])
+          .filter(s =>
+            s.meta?.coord &&
+            neighborCoordKeys.includes(`${s.meta.coord.q}_${s.meta.coord.r}`) &&
+            !s.meta.isUnlocked
+          )
+          .map(s => s.stageId)
+      : [];
+
+    const normalStages = (fullPlanet?.stages ?? []).filter(s => !s.meta?.isMatchStage);
+    const completedCount = normalStages.filter(s => !!s.meta?.isCompleted).length;
+    // The current stage is now completed too (not yet reflected in fullPlanet)
+    const playerLevel = completedCount + 1;
+    const toGrant = AVATAR_CATALOG
+      .filter(a => a.unlockType === "stage" && a.stageRequired === playerLevel)
+      .map(a => a.id);
+
+    const planetCompleted =
+      normalStages.length > 0 &&
+      normalStages.every(s => !!s.meta?.isCompleted || s.stageId === stageId);
+
+    // Batch 2: unlock neighbors + grant avatars + evaluate achievements (all independent)
+    const achievementEvents = buildAchievementEvents({
+      isMatchStage,
+      justCompleted: true,
+      newPlacedTiles,
+      newConnections,
+      newTemplate,
+      score,
+      coinsAwarded,
+      planetCompleted,
+    });
+
+    const unlockPromise = stagesToUnlock.length > 0
+      ? Planet.updateOne(
           { userId, planetId },
           { $set: { "stages.$[elem].meta.isUnlocked": true } },
           { arrayFilters: [{ "elem.stageId": { $in: stagesToUnlock } }] }
-        );
-      }
-    }
+        )
+      : Promise.resolve();
+
+    const avatarPromise = toGrant.length > 0
+      ? User.updateOne({ _id: userId }, { $addToSet: { ownedAvatars: { $each: toGrant } } })
+      : Promise.resolve();
+
+    [,, achievementResult] = await Promise.all([
+      unlockPromise,
+      avatarPromise,
+      evaluateAchievementEvents({ userId, planetId, events: achievementEvents }),
+    ]);
   }
 
-  const achievementEvents = buildAchievementEvents({
-    isMatchStage,
-    justCompleted,
-    newPlacedTiles,
-    newConnections,
-    newTemplate,
-    score,
-    coinsAwarded,
-    planetCompleted: justCompleted
-      ? await isPlanetCompleted({ userId, planetId })
-      : false,
-  });
-
-  const achievementResult = await evaluateAchievementEvents({
-    userId,
-    planetId,
-    events: achievementEvents,
-  });
-
-  if (achievementResult.totalCoins !== null && achievementResult.totalCoins !== undefined) {
-    totalCoins = achievementResult.totalCoins;
+  if (achievementResult.userCoins !== null && achievementResult.userCoins !== undefined) {
+    userCoins = achievementResult.userCoins;
   }
 
   return {
@@ -574,7 +635,7 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation, a
     progress: newState.progress,
     targetScore,
     coinsAwarded,
-    totalCoins,
+    userCoins,
     achievementRewards: achievementResult.unlocked,
     achievementCoinsAwarded: achievementResult.coinsAwarded,
     scoredConnections,
