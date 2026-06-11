@@ -41,6 +41,9 @@ module.exports = (io) => {
       if (!targetEntry) { socket.emit('challengeError', 'No players available'); return; }
       const [targetSocketId, target] = targetEntry;
 
+      // Notify target immediately so their UI disables
+      io.to(targetSocketId).emit('challenged', {});
+
       // Remove both BEFORE the async operation — prevents concurrent challenges
       // from matching the same player twice (Node.js is single-threaded so this
       // deletion is atomic relative to other incoming events)

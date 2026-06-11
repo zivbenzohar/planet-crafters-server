@@ -77,6 +77,7 @@ router.get("/user", auth, async (req, res) => {
     const user = await User.findById(req.user.id).select("-password");
     return res.json(user);
   } catch (err) {
+    console.error(err);
     return res.status(500).json({ msg: "Server error" });
   }
 });
@@ -181,6 +182,9 @@ router.post("/google", async (req, res) => {
     });
   } catch (err) {
     console.error("[Google Auth]", err.message);
+    if (err.name === "MongoServerError" || err.name === "MongoError") {
+      return res.status(500).json({ msg: "Server error" });
+    }
     return res.status(401).json({ msg: "Invalid Google token" });
   }
 });
