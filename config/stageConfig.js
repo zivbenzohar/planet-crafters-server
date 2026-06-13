@@ -7,11 +7,11 @@
  * These values were calibrated against the Greedy Agent simulator so that
  * the resulting Success Rates fall within each level's SR window:
  *
- *   Level 1 (90-100% SR) →  42 connections
- *   Level 2 (90-100% SR) →  52 connections
- *   Level 3 (65-85%  SR) →  54 connections
- *   Level 4 (40-60%  SR) →  55 connections
- *   Level 5 (20-35%  SR) →  57 connections
+ *   Level 1 (90-100% SR) →  40 connections
+ *   Level 2 (65-85%  SR) →  52 connections
+ *   Level 3 (40-60%  SR) →  56 connections
+ *   Level 4 (20-35%  SR) →  57 connections
+ *   Level 5 ( 5-20%  SR) →  59 connections
  *
  * Calibrated for the shuffle-simulation model: each greedy sim shuffles the
  * 30-tile deck before play, so SR measures the fraction of draw-order
@@ -25,11 +25,11 @@
 const DEFAULT_TARGET = 20;
 
 const TARGET_BY_LEVEL = {
-  1: 42,
+  1: 40,
   2: 52,
-  3: 54,
-  4: 55,
-  5: 57,
+  3: 56,
+  4: 57,
+  5: 59,
 };
 
 /**

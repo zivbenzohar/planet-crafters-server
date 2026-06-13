@@ -22,10 +22,10 @@ const { TARGET_BY_LEVEL }     = require(path.join(root, 'config/stageConfig'));
 
 const WINDOWS = {
   1: [90, 100],
-  2: [90, 100],
-  3: [65, 85],
-  4: [40, 60],
-  5: [20, 35],
+  2: [65, 85],
+  3: [40, 60],
+  4: [20, 35],
+  5: [5,  20],
 };
 
 // ── 64-tile catalog (mirrors seed/seedHexTiles.js) ────────────────────────
@@ -228,7 +228,7 @@ async function runLevelTest(level) {
   console.log(`Verified SR:     ${sr}%  →  ${pass ? '✓ PASS' : `✗ FAIL (expected ${lo}–${hi}%)`}`);
   console.log();
 
-  return { pass, deck };
+  return { pass, deck, sr };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -286,21 +286,37 @@ async function main() {
 
   let passed = 0;
   let level3Deck = null;
+  const results = [];
 
   for (let level = 1; level <= 5; level++) {
-    const { pass, deck } = await runLevelTest(level);
+    const { pass, deck, sr } = await runLevelTest(level);
     if (pass) passed++;
     if (level === 3) level3Deck = deck;
+    results.push({ level, pass, sr });
   }
 
   if (level3Deck) {
     runDetailedTrace(level3Deck, TARGET_BY_LEVEL[3]);
   }
 
+  // ── Summary table ─────────────────────────────────────────────────────────
   const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
   console.log(SEP);
-  console.log(`SUMMARY: ${passed === 5 ? '✓' : '✗'} ${passed}/5 PASSED`);
-  console.log(`Total time: ${elapsed}s`);
+  console.log('RESULTS SUMMARY');
+  console.log(SEP);
+  const HDR2 = 'Level  Target  SR Window    Actual SR  Pass/Fail';
+  console.log(HDR2);
+  console.log('─'.repeat(HDR2.length));
+  for (const { level, pass, sr } of results) {
+    const [lo, hi] = WINDOWS[level];
+    const target   = String(TARGET_BY_LEVEL[level]).padEnd(6);
+    const window   = `${lo}-${hi}%`.padEnd(12);
+    const actual   = `${sr}%`.padEnd(10);
+    const verdict  = pass ? '✓ PASS' : '✗ FAIL';
+    console.log(`  ${level}      ${target}  ${window} ${actual} ${verdict}`);
+  }
+  console.log('─'.repeat(HDR2.length));
+  console.log(`${passed === 5 ? '✓' : '✗'} ${passed}/5 levels passed   (total time: ${elapsed}s)`);
   console.log(SEP);
   console.log();
 

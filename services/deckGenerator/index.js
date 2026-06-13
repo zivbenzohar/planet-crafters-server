@@ -9,10 +9,10 @@
  *
  * Difficulty → target SR window:
  *   1: 90-100 %   (tutorial)
- *   2: 90-100 %   (easy)
- *   3: 65-85 %   (medium)
- *   4: 40-60 %   (default)
- *   5: 20-35 %   (hard)
+ *   2: 65-85 %   (easy)
+ *   3: 40-60 %   (default)
+ *   4: 20-35 %   (hard)
+ *   5:  5-20 %   (very hard)
  *
  * Returns an array of 30 MongoDB ObjectId strings (tile IDs) ready to be
  * sliced into hand + deck by the caller.
@@ -32,10 +32,10 @@ const { mutateDeck }          = require('./deckMutator');
 
 const DIFFICULTY_WINDOWS = {
   1: { min: 90, max: 100 },
-  2: { min: 90, max: 100 },
-  3: { min: 65, max: 85  },
-  4: { min: 40, max: 60  },
-  5: { min: 20, max: 35  },
+  2: { min: 65, max: 85  },
+  3: { min: 40, max: 60  },
+  4: { min: 20, max: 35  },
+  5: { min: 5,  max: 20  },
 };
 
 const MAX_ITERATIONS   = 20;
