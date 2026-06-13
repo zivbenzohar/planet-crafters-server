@@ -8,11 +8,11 @@
  * Phase C: If SR is outside the difficulty window, mutate one tile and repeat.
  *
  * Difficulty → target SR window:
- *   1: 90-100 %   (almost always winnable)
- *   2: 65-80 %
- *   3: 40-60 %   (default)
- *   4: 20-35 %
- *   5:  5-15 %   (very hard)
+ *   1: 90-100 %   (tutorial)
+ *   2: 90-100 %   (easy)
+ *   3: 65-85 %   (medium)
+ *   4: 40-60 %   (default)
+ *   5: 20-35 %   (hard)
  *
  * Returns an array of 30 MongoDB ObjectId strings (tile IDs) ready to be
  * sliced into hand + deck by the caller.
@@ -32,10 +32,10 @@ const { mutateDeck }          = require('./deckMutator');
 
 const DIFFICULTY_WINDOWS = {
   1: { min: 90, max: 100 },
-  2: { min: 65, max: 85  },
-  3: { min: 40, max: 60  },
-  4: { min: 20, max: 35  },
-  5: { min: 5,  max: 20  },
+  2: { min: 90, max: 100 },
+  3: { min: 65, max: 85  },
+  4: { min: 40, max: 60  },
+  5: { min: 20, max: 35  },
 };
 
 const MAX_ITERATIONS   = 20;

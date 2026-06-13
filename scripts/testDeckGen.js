@@ -22,10 +22,10 @@ const { TARGET_BY_LEVEL }     = require(path.join(root, 'config/stageConfig'));
 
 const WINDOWS = {
   1: [90, 100],
-  2: [65, 85],
-  3: [40, 60],
-  4: [20, 35],
-  5: [5,  20],
+  2: [90, 100],
+  3: [65, 85],
+  4: [40, 60],
+  5: [20, 35],
 };
 
 // ── 64-tile catalog (mirrors seed/seedHexTiles.js) ────────────────────────
