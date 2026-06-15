@@ -20,7 +20,6 @@ module.exports = (io) => {
       socket.join('lobby');
       socket.data.userId = userId;
       lobbyPlayers.set(socket.id, { userId, username: username || userId, planetId, stageId });
-      console.log(`[lobby] ${username} joined (${userId})`);
       broadcastLobby(io);
     });
 
@@ -65,7 +64,6 @@ module.exports = (io) => {
           { userId: target.userId, username: target.username, planetId: target.planetId, stageId: target.stageId }
         );
 
-        console.log(`[lobby] Match created: ${challenger.username} vs ${target.username}`);
 
         delete socket.data.pendingTargetId;
         const targetSocket = io.sockets.sockets.get(targetSocketId);
@@ -79,11 +77,9 @@ module.exports = (io) => {
           matchService.forceEndMatch(match.matchId);
           if (challengerGone && targetSocket?.connected) {
             targetSocket.emit('challengeError', 'Opponent disconnected before match started');
-            console.log(`[lobby] Challenger disconnected during creation — match aborted`);
           }
           if (targetGone && socket.connected) {
             socket.emit('challengeError', 'Opponent disconnected before match started');
-            console.log(`[lobby] Target disconnected during creation — match aborted`);
           }
           return;
         }
@@ -115,7 +111,6 @@ module.exports = (io) => {
       socket.join(`vs_${matchId}`);
       socket.data.matchId = matchId;
       socket.data.userId = userId;
-      console.log(`[vsSocket] joinVsMatch: userId=${userId} matchId=${matchId}`);
     });
 
     socket.on('vsScore', async ({ matchId, userId, score }) => {
@@ -152,13 +147,8 @@ module.exports = (io) => {
         broadcastLobby(io);
       }
 
-      // Player disconnected while createMatchForTwo was in progress
-      // Just log — createMatchForTwo will send challengeError after it completes
-      if (socket.data.pendingTargetId) {
-        console.log(`[vsSocket] Challenger disconnected mid-challenge — will notify target after match creation`);
-      }
-      if (socket.data.pendingChallengerId) {
-        console.log(`[vsSocket] Target disconnected mid-challenge — will notify challenger after match creation`);
+      if (socket.data.pendingTargetId || socket.data.pendingChallengerId) {
+        // createMatchForTwo will send challengeError after it completes
       }
 
       const matchId = socket.data.matchId;
@@ -175,16 +165,13 @@ module.exports = (io) => {
             if (opponentSocket) {
               matchService.forfeitMatch(matchId, socket.data.userId);
               opponentSocket.emit('opponentLeft', {});
-              console.log(`[vsSocket] Opponent left match ${matchId} — forfeited, notifying player not yet in room`);
             } else {
               matchService.forceEndMatch(matchId);
-              console.log(`[vsSocket] Both players disconnected — match ${matchId} force-ended`);
             }
           } else {
             // Forfeiting player loses — remaining player wins
             matchService.forfeitMatch(matchId, socket.data.userId);
             io.to(`vs_${matchId}`).emit('opponentLeft', {});
-            console.log(`[vsSocket] Opponent left match ${matchId} — forfeited, notifying remaining player`);
           }
         }
       }

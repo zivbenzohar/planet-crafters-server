@@ -21,19 +21,12 @@ const _cooldowns = {};
 const COOLDOWN_MS = 8000;
 
 async function generateReaction(eventType, matchId, context = {}) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.log('[AI] No API key — skipping reaction');
-    return null;
-  }
+  if (!process.env.ANTHROPIC_API_KEY) return null;
 
   const now = Date.now();
   const key = `${matchId}_${eventType}`;
-  if (_cooldowns[key] && now - _cooldowns[key] < COOLDOWN_MS) {
-    console.log(`[AI] Cooldown active for ${eventType}`);
-    return null;
-  }
+  if (_cooldowns[key] && now - _cooldowns[key] < COOLDOWN_MS) return null;
   _cooldowns[key] = now;
-  console.log(`[AI] Generating reaction: eventType=${eventType} context=${JSON.stringify(context)}`);
 
   const promptFn = PROMPTS[eventType];
   if (!promptFn) return null;
@@ -50,9 +43,7 @@ async function generateReaction(eventType, matchId, context = {}) {
     messages: [{ role: 'user', content: prompt }],
   });
 
-  const reaction = message.content[0]?.text?.trim() ?? null;
-  console.log(`[AI] Reaction generated: "${reaction}"`);
-  return reaction;
+  return message.content[0]?.text?.trim() ?? null;
 }
 
 module.exports = { generateReaction };
