@@ -94,11 +94,12 @@ async function getStageState({ userId, planetId, stageId, deckSize }) {
     state.hand.tilesInHand.length > 0;
 
   const isAlreadyStarted = stage.meta?.isStarted === true;
+  const isCompleted = state.progress?.isCompleted === true;
 
-  if (!hasDeck && !hasHand && !isAlreadyStarted) {
+  if ((!hasDeck && !hasHand && !isAlreadyStarted) || isCompleted) {
     const { hand, deck } = await createDeckAndHand(deckSize, 3, { level, targetScore });
 
-    state = { ...state, hand, deck };
+    state = { ...emptyStageState(), hand, deck };
 
     await Planet.updateOne(
       { userId, planetId, "stages.stageId": stageId },
@@ -459,6 +460,7 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation, a
   const useDoubleScore = activeBooster === "doubleScore";
   if (useDoubleScore) {
     await consumeBooster(userId, "doubleScore");
+    evaluateAchievementEvents({ userId, events: [{ metricKey: "single.boost_types_used", mode: "unique", uniqueValue: "doubleScore" }] }).catch(() => {});
   }
   const scoreMultiplier = useDoubleScore ? 2 : 1;
   const scoreGained = (newConnections + bonusPoints) * scoreMultiplier;
@@ -662,6 +664,7 @@ async function cancelLastTile({ userId, planetId, stageId }) {
   if (state.progress?.isCompleted) throw new Error("Cannot undo a completed stage");
 
   await consumeBooster(userId, "cancelPlacement");
+  const cancelAchResult = await evaluateAchievementEvents({ userId, events: [{ metricKey: "single.boost_types_used", mode: "unique", uniqueValue: "cancelPlacement" }] }).catch(() => ({ unlocked: [], coinsAwarded: 0 }));
 
   const placedTiles = state.map?.placedTiles ?? [];
   const restoredTiles = placedTiles.filter(
@@ -707,6 +710,7 @@ async function cancelLastTile({ userId, planetId, stageId }) {
     deck: newState.deck,
     progress: newState.progress,
     targetScore,
+    achievementRewards: cancelAchResult.unlocked,
   };
 }
 
@@ -723,6 +727,7 @@ async function addHexToHand({ userId, planetId, stageId }) {
   if (!state) throw new Error("Stage state not initialized");
 
   await consumeBooster(userId, "addHex");
+  const addHexAchResult = await evaluateAchievementEvents({ userId, events: [{ metricKey: "single.boost_types_used", mode: "unique", uniqueValue: "addHex" }] }).catch(() => ({ unlocked: [], coinsAwarded: 0 }));
 
   // Pick a random tile from the full catalog (new tile, not from existing deck)
   const allTiles = await HexTile.find({}, { _id: 1 }).lean();
@@ -754,6 +759,7 @@ async function addHexToHand({ userId, planetId, stageId }) {
     deck: newState.deck,
     progress: newState.progress,
     targetScore,
+    achievementRewards: addHexAchResult.unlocked,
   };
 }
 

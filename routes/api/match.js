@@ -39,11 +39,13 @@ router.post('/join', auth, async (req, res) => {
 });
 
 // GET /api/matches/:matchId
-router.get('/:matchId', auth, (req, res) => {
+router.get('/:matchId', auth, async (req, res) => {
   try {
     const userId = String(req.user.id);
     const match = matchService.getMatch(req.params.matchId);
-    res.json({ ...match, myUserId: userId });
+    if (match._achievementsPromise) await match._achievementsPromise;
+    const achievementRewards = match.achievementsByPlayer?.[userId] ?? [];
+    res.json({ ...match, myUserId: userId, achievementRewards });
   } catch (e) {
     res.status(404).json({ msg: e.message });
   }

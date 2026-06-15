@@ -1,4 +1,5 @@
 const matchService = require('../../services/matchService');
+const { forfeitMatch } = matchService;
 const aiReactionService = require('../../services/aiReactionService');
 
 // lobbyPlayers: socketId → { userId, username, planetId, stageId }
@@ -53,6 +54,11 @@ module.exports = (io) => {
       io.sockets.sockets.get(targetSocketId)?.leave('lobby');
       broadcastLobby(io);
 
+      // Track pending challenge so disconnect during createMatchForTwo can notify target
+      socket.data.pendingTargetId = targetSocketId;
+      const pendingTargetSocket = io.sockets.sockets.get(targetSocketId);
+      if (pendingTargetSocket) pendingTargetSocket.data.pendingChallengerId = socket.id;
+
       try {
         const match = await matchService.createMatchForTwo(
           { userId: challenger.userId, username: challenger.username, planetId: challenger.planetId, stageId: challenger.stageId },
@@ -61,12 +67,39 @@ module.exports = (io) => {
 
         console.log(`[lobby] Match created: ${challenger.username} vs ${target.username}`);
 
-        // Notify both with their own myUserId
+        delete socket.data.pendingTargetId;
+        const targetSocket = io.sockets.sockets.get(targetSocketId);
+        if (targetSocket) delete targetSocket.data.pendingChallengerId;
+
+        // If either player disconnected during async match creation — abort
+        const challengerGone = !socket.connected;
+        const targetGone = !targetSocket || !targetSocket.connected;
+
+        if (challengerGone || targetGone) {
+          matchService.forceEndMatch(match.matchId);
+          if (challengerGone && targetSocket?.connected) {
+            targetSocket.emit('challengeError', 'Opponent disconnected before match started');
+            console.log(`[lobby] Challenger disconnected during creation — match aborted`);
+          }
+          if (targetGone && socket.connected) {
+            socket.emit('challengeError', 'Opponent disconnected before match started');
+            console.log(`[lobby] Target disconnected during creation — match aborted`);
+          }
+          return;
+        }
+
+        // Both still connected — tag and notify
+        socket.data.matchId = match.matchId;
+        targetSocket.data.matchId = match.matchId;
+
         socket.emit('matchReady', { ...match, myUserId: challenger.userId });
-        io.to(targetSocketId).emit('matchReady', { ...match, myUserId: target.userId });
+        targetSocket.emit('matchReady', { ...match, myUserId: target.userId });
 
       } catch (e) {
         console.error('[lobby] createMatchForTwo error:', e.message);
+        delete socket.data.pendingTargetId;
+        const ts = io.sockets.sockets.get(targetSocketId);
+        if (ts) delete ts.data.pendingChallengerId;
         // Re-add both to lobby so they can try again
         lobbyPlayers.set(socket.id, challenger);
         lobbyPlayers.set(targetSocketId, target);
@@ -119,6 +152,15 @@ module.exports = (io) => {
         broadcastLobby(io);
       }
 
+      // Player disconnected while createMatchForTwo was in progress
+      // Just log — createMatchForTwo will send challengeError after it completes
+      if (socket.data.pendingTargetId) {
+        console.log(`[vsSocket] Challenger disconnected mid-challenge — will notify target after match creation`);
+      }
+      if (socket.data.pendingChallengerId) {
+        console.log(`[vsSocket] Target disconnected mid-challenge — will notify challenger after match creation`);
+      }
+
       const matchId = socket.data.matchId;
       if (matchId) {
         const match = matchService.getMatchRaw(matchId);
@@ -126,12 +168,23 @@ module.exports = (io) => {
           const room = io.sockets.adapter.rooms.get(`vs_${matchId}`);
           const remaining = room ? room.size : 0;
           if (remaining === 0) {
-            matchService.forceEndMatch(matchId);
-            console.log(`[vsSocket] Both players disconnected — match ${matchId} force-ended`);
+            // Check if opponent is still connected but hasn't joined the vs room yet
+            const opponentSocket = [...io.sockets.sockets.values()].find(
+              s => s.data.matchId === matchId && s.id !== socket.id
+            );
+            if (opponentSocket) {
+              matchService.forfeitMatch(matchId, socket.data.userId);
+              opponentSocket.emit('opponentLeft', {});
+              console.log(`[vsSocket] Opponent left match ${matchId} — forfeited, notifying player not yet in room`);
+            } else {
+              matchService.forceEndMatch(matchId);
+              console.log(`[vsSocket] Both players disconnected — match ${matchId} force-ended`);
+            }
           } else {
-            // Notify remaining player that opponent left so they can exit gracefully
+            // Forfeiting player loses — remaining player wins
+            matchService.forfeitMatch(matchId, socket.data.userId);
             io.to(`vs_${matchId}`).emit('opponentLeft', {});
-            console.log(`[vsSocket] Opponent left match ${matchId} — notifying remaining player`);
+            console.log(`[vsSocket] Opponent left match ${matchId} — forfeited, notifying remaining player`);
           }
         }
       }
