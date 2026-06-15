@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const Planet = require('../model/Planet_model');
+const User = require('../model/User_model');
 const { createDeckAndHand } = require('./planetState.service');
 const { evaluateAchievementEvents } = require('./achievement.service');
 
@@ -147,12 +148,8 @@ function submitFinalScore(matchId, userId, finalScore) {
   player.score = finalScore;
   player.finished = true;
 
-  const allFinished = match.players.length === 2 && match.players.every(p => p.finished);
-  const timeUp = match.startTime && (Date.now() - match.startTime) / 1000 >= match.duration;
-
-  if (allFinished || timeUp) {
-    _endMatch(match);
-  }
+  // End match as soon as any player finishes their deck (or time is up)
+  _endMatch(match);
 
   return match;
 }
@@ -161,29 +158,30 @@ function _endMatch(match) {
   if (match.status === 'finished') return;
   match.status = 'finished';
 
-  if (match.players.length < 2) {
-    match.winnerId = match.players[0]?.userId ?? null;
-  } else {
-    const [p1, p2] = match.players;
-    if (p1.score > p2.score) match.winnerId = p1.userId;
-    else if (p2.score > p1.score) match.winnerId = p2.userId;
-    else match.winnerId = null;
-  }
-
-  // Award +1 coin to winner's planet
-  if (match.winnerId) {
-    const winner = match.players.find(p => p.userId === match.winnerId);
-    if (winner) {
-      Planet.updateOne(
-        { userId: winner.userId, planetId: winner.planetId },
-        { $inc: { totalCoins: 1 } }
-      ).catch(err => console.error('[Match] Award coin error:', err));
+  // Only calculate winner from scores if not already forced (e.g. forfeit)
+  if (match.winnerId === undefined) {
+    if (match.players.length < 2) {
+      match.winnerId = match.players[0]?.userId ?? null;
+    } else {
+      const [p1, p2] = match.players;
+      if (p1.score > p2.score) match.winnerId = p1.userId;
+      else if (p2.score > p1.score) match.winnerId = p2.userId;
+      else match.winnerId = null;
     }
   }
 
-  recordFinishedMatchAchievements(match).catch(err =>
-    console.error('[Match] Achievement update error:', err)
-  );
+  // Award +2 coins to winner
+  if (match.winnerId) {
+    User.updateOne(
+      { _id: match.winnerId },
+      { $inc: { coins: 2 } }
+    ).catch(err => console.error('[Match] Award coin error:', err));
+  }
+
+  match._achievementsPromise = recordFinishedMatchAchievements(match)
+    .then(byPlayer => { match.achievementsByPlayer = byPlayer; })
+    .catch(err => console.error('[Match] Achievement update error:', err))
+    .finally(() => { match._achievementsPromise = null; });
 
   // Clean up temporary match stages from each player's planet
   if (match.matchStageId) {
@@ -197,21 +195,48 @@ function _endMatch(match) {
 }
 
 async function recordFinishedMatchAchievements(match) {
+  const byPlayer = {};
+
   for (const player of match.players) {
+    const won = match.winnerId === player.userId;
+
     const events = [
       { metricKey: 'multi.matches_played', mode: 'inc', value: 1 },
     ];
 
-    if (match.winnerId === player.userId) {
+    if (won) {
       events.push({ metricKey: 'multi.matches_won', mode: 'inc', value: 1 });
     }
 
-    await evaluateAchievementEvents({
+    // Win streak: increment on win, reset to 0 on loss/tie
+    const UserAchievement = require('../model/UserAchievement_model');
+    const streakDoc = await UserAchievement.findOne({
+      userId: player.userId,
+      achievementId: { $in: ['multi_008', 'multi_009', 'multi_010'] },
+    }).sort({ progress: -1 }).lean();
+
+    const currentStreak = streakDoc?.progress ?? 0;
+    const newStreak = won ? currentStreak + 1 : 0;
+    if (newStreak > 0) {
+      events.push({ metricKey: 'multi.win_streak', mode: 'max', value: newStreak });
+    } else {
+      // Reset streak tracking — set progress to 0 for all streak achievements
+      await UserAchievement.updateMany(
+        { userId: player.userId, achievementId: { $in: ['multi_008', 'multi_009', 'multi_010'] }, completed: false },
+        { $set: { progress: 0 } }
+      );
+    }
+
+    const result = await evaluateAchievementEvents({
       userId: player.userId,
       planetId: player.planetId,
       events,
     });
+
+    byPlayer[player.userId] = result.unlocked ?? [];
   }
+
+  return byPlayer;
 }
 
 // Clean up finished matches after 10 minutes
@@ -265,4 +290,13 @@ function forceEndMatch(matchId) {
   if (match) _endMatch(match);
 }
 
-module.exports = { createMatch, joinMatch, getMatch, getMatchRaw, playerReady, updateScore, submitFinalScore, createMatchForTwo, forceEndMatch };
+function forfeitMatch(matchId, forfeitingUserId) {
+  const match = matches[matchId];
+  if (!match || match.status !== 'active') return;
+  // Force the other player as winner regardless of scores
+  const winner = match.players.find(p => p.userId !== forfeitingUserId);
+  if (winner) match.winnerId = winner.userId;
+  _endMatch(match);
+}
+
+module.exports = { createMatch, joinMatch, getMatch, getMatchRaw, playerReady, updateScore, submitFinalScore, createMatchForTwo, forceEndMatch, forfeitMatch };

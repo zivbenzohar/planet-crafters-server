@@ -79,6 +79,7 @@ const TRIGGER_BY_METRIC = {
   "single.tiles_placed_in_level": "planet-state.place-tile",
   "single.hex_matches_total": "planet-state.place-tile",
   "single.tile_types_used": "planet-state.place-tile",
+  "single.boost_types_used": "planet-state.boost-used",
   "single.levels_completed": "planet-state.stage-completed",
   "single.level_completed_stars": "planet-state.stage-completed",
   "single.score_in_level": "planet-state.stage-completed",
@@ -87,6 +88,7 @@ const TRIGGER_BY_METRIC = {
   "multi.tiles_placed_total": "planet-state.place-tile",
   "multi.matches_played": "match.finished",
   "multi.matches_won": "match.finished",
+  "multi.win_streak": "match.finished",
 };
 
 function inferMetricKey(achievement) {

@@ -35,6 +35,14 @@ async function run() {
 
   await mongoose.connect(mongoURI);
 
+  const activeIds = achievements.map(a => a.id);
+
+  // Deactivate achievements removed from the JSON
+  await Achievement.updateMany(
+    { achievementId: { $nin: activeIds } },
+    { $set: { isActive: false } }
+  );
+
   const operations = achievements.map(achievement => {
     const metricKey = inferMetricKey(achievement);
 
