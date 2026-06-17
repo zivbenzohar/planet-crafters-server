@@ -1,10 +1,12 @@
 const crypto = require('crypto');
+const EventEmitter = require('events');
 const Planet = require('../model/Planet_model');
 const User = require('../model/User_model');
 const { createDeckAndHand } = require('./planetState.service');
 const { evaluateAchievementEvents } = require('./achievement.service');
 
 const matches = {};
+const matchEvents = new EventEmitter();
 
 function generateCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -148,7 +150,7 @@ function submitFinalScore(matchId, userId, finalScore) {
   player.score = finalScore;
   player.finished = true;
 
-  // End match as soon as any player finishes their deck (or time is up)
+  matchEvents.emit('playerFinished', { matchId, finishedUserId: userId });
   _endMatch(match);
 
   return match;
@@ -299,4 +301,4 @@ function forfeitMatch(matchId, forfeitingUserId) {
   _endMatch(match);
 }
 
-module.exports = { createMatch, joinMatch, getMatch, getMatchRaw, playerReady, updateScore, submitFinalScore, createMatchForTwo, forceEndMatch, forfeitMatch };
+module.exports = { createMatch, joinMatch, getMatch, getMatchRaw, playerReady, updateScore, submitFinalScore, createMatchForTwo, forceEndMatch, forfeitMatch, matchEvents };

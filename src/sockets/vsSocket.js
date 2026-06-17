@@ -1,5 +1,5 @@
 const matchService = require('../../services/matchService');
-const { forfeitMatch } = matchService;
+const { forfeitMatch, matchEvents } = matchService;
 const aiReactionService = require('../../services/aiReactionService');
 
 // lobbyPlayers: socketId → { userId, username, planetId, stageId }
@@ -11,6 +11,16 @@ function broadcastLobby(io) {
 }
 
 module.exports = (io) => {
+  matchEvents.on('playerFinished', ({ matchId, finishedUserId }) => {
+    const allSockets = [...io.sockets.sockets.values()];
+    const finishedSocket = allSockets.find(s => s.data.matchId === matchId && s.data.userId === finishedUserId);
+    if (finishedSocket) {
+      io.to(`vs_${matchId}`).except(finishedSocket.id).emit('opponentFinished', {});
+    } else {
+      const opponentSocket = allSockets.find(s => s.data.matchId === matchId && s.data.userId !== finishedUserId);
+      opponentSocket?.emit('opponentFinished', {});
+    }
+  });
   io.on('connection', (socket) => {
 
     // ── Lobby ────────────────────────────────────────────────────

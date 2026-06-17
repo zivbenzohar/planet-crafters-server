@@ -14,6 +14,73 @@ function stageLevel(stage, stageId) {
 // In-memory cache for HexTile templates (static data, never changes at runtime)
 const _tileTemplateCache = new Map();
 
+// ─── Pre-generation queue ─────────────────────────────────────────────────────
+const _activePregens = new Map(); // stageId → Promise<void>  (currently generating)
+const _pregenQueue   = [];        // [{ userId, planetId, stageId }]  (waiting)
+let   _queueRunning  = false;
+
+function _removeFromQueue(stageId) {
+  const idx = _pregenQueue.findIndex(j => j.stageId === stageId);
+  if (idx !== -1) _pregenQueue.splice(idx, 1);
+}
+
+async function _doPreGenerate({ userId, planetId, stageId, deckSize = 30 }) {
+  const promise = (async () => {
+    try {
+      const level       = getLevelFromStageId(stageId);
+      const targetScore = getTargetScore(level);
+      const tiles       = await HexTile.find({}).lean();
+      if (!tiles.length) return;
+
+      const { tileIds } = await generateStageDeck({ level, targetScore, tiles, deckSize });
+
+      const preHand = { maxHandSize: 3, tilesInHand: tileIds.slice(0, 3) };
+      const preDeck = { remainingTiles: tileIds.slice(3) };
+
+      await Planet.updateOne(
+        {
+          userId, planetId,
+          stages: {
+            $elemMatch: {
+              stageId,
+              $or: [{ 'meta.isStarted': { $ne: true } }, { 'state.progress.isCompleted': true }],
+            },
+          },
+        },
+        { $set: { 'stages.$.state.hand': preHand, 'stages.$.state.deck': preDeck } }
+      );
+      console.log(`[preGenerate] Deck ready for stage ${stageId}`);
+    } catch (err) {
+      console.error(`[preGenerate] Failed for stage ${stageId}:`, err.message);
+    } finally {
+      _activePregens.delete(stageId);
+    }
+  })();
+
+  _activePregens.set(stageId, promise);
+  return promise;
+}
+
+async function _processQueue() {
+  if (_queueRunning) return;
+  _queueRunning = true;
+  while (_pregenQueue.length > 0) {
+    const job = _pregenQueue.shift();
+    if (_activePregens.has(job.stageId)) continue;
+    await _doPreGenerate(job);
+  }
+  _queueRunning = false;
+}
+
+function enqueuePreGen(job, { front = false } = {}) {
+  if (_activePregens.has(job.stageId)) return;
+  if (_pregenQueue.some(j => j.stageId === job.stageId)) return;
+  if (front) _pregenQueue.unshift(job);
+  else       _pregenQueue.push(job);
+  _processQueue().catch(err => console.error('[preGenQueue]', err.message));
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function getTileTemplates(tileIds) {
   const missing = tileIds.filter(id => !_tileTemplateCache.has(id));
   if (missing.length > 0) {
@@ -97,20 +164,44 @@ async function getStageState({ userId, planetId, stageId, deckSize }) {
   const isCompleted = state.progress?.isCompleted === true;
 
   if ((!hasDeck && !hasHand && !isAlreadyStarted) || isCompleted) {
-    const { hand, deck } = await createDeckAndHand(deckSize, 3, { level, targetScore });
+    let usedPreGen = false;
 
-    state = { ...emptyStageState(), hand, deck };
-
-    await Planet.updateOne(
-      { userId, planetId, "stages.stageId": stageId },
-      {
-        $set: {
-          "stages.$.state": state,
-          "stages.$.meta.isStarted": true,
-          "stages.$.meta.lastPlayedAt": new Date(),
-        },
+    if (!isCompleted && _activePregens.has(stageId)) {
+      // Background pre-gen is running — wait for it instead of generating a second deck
+      await _activePregens.get(stageId);
+      const refreshed = await Planet.findOne(
+        { userId, planetId, 'stages.stageId': stageId },
+        { stages: { $elemMatch: { stageId } } }
+      ).lean();
+      const preFilled = refreshed?.stages?.[0]?.state;
+      if (preFilled?.hand?.tilesInHand?.length > 0) {
+        state = preFilled;
+        usedPreGen = true;
+        await Planet.updateOne(
+          { userId, planetId, 'stages.stageId': stageId },
+          { $set: { 'stages.$.meta.isStarted': true, 'stages.$.meta.lastPlayedAt': new Date() } }
+        );
       }
-    );
+      // If pre-gen failed (preFilled empty) — falls through to inline generation below
+    } else {
+      // Stage is in queue but player needs it now — remove and generate inline
+      _removeFromQueue(stageId);
+    }
+
+    if (!usedPreGen) {
+      const { hand, deck } = await createDeckAndHand(deckSize, 3, { level, targetScore });
+      state = { ...emptyStageState(), hand, deck };
+      await Planet.updateOne(
+        { userId, planetId, "stages.stageId": stageId },
+        {
+          $set: {
+            "stages.$.state": state,
+            "stages.$.meta.isStarted": true,
+            "stages.$.meta.lastPlayedAt": new Date(),
+          },
+        }
+      );
+    }
   } else {
     // Stage already has a deck — always mark as started when accessed
     await Planet.updateOne(
@@ -184,6 +275,9 @@ async function resetStageState({ userId, planetId, stageId }) {
   if (!updated || !updated.stages?.length) {
     throw new Error("Stage not found");
   }
+
+  // Pre-generate deck for next play in background (front of queue — player may restart soon)
+  enqueuePreGen({ userId, planetId, stageId }, { front: true });
 
   return {
     planetId,
@@ -622,6 +716,12 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation, a
       avatarPromise,
       evaluateAchievementEvents({ userId, planetId, events: achievementEvents }),
     ]);
+
+    // Pre-generate decks for newly unlocked stages + current stage (for replay) in background
+    enqueuePreGen({ userId, planetId, stageId });
+    for (const unlockedStageId of stagesToUnlock) {
+      enqueuePreGen({ userId, planetId, stageId: unlockedStageId });
+    }
   }
 
   if (achievementResult.userCoins !== null && achievementResult.userCoins !== undefined) {
