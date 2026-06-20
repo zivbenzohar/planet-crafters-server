@@ -4,6 +4,7 @@ const router = express.Router();
 
 const auth = require("../../middleware/auth");
 const { getOrCreateActivePlanet } = require("../../services/planet.service");
+const { enqueuePreGen } = require("../../services/planetState.service");
 const User = require("../../model/User_model");
 
 /**
@@ -13,10 +14,17 @@ router.get("/active", auth, async (req, res) => {
   try {
     const userId = String(req.user.id);
 
-    const [planet, user] = await Promise.all([
+    const [{ planet, wasCreated }, user] = await Promise.all([
       getOrCreateActivePlanet({ userId, planetId: "planet_01", totalStages: 37 }),
       User.findById(userId).select("coins").lean(),
     ]);
+
+    if (wasCreated) {
+      const unlockedStages = planet.stages.filter(s => s.meta?.isUnlocked && !s.meta?.isStarted);
+      for (const s of unlockedStages) {
+        enqueuePreGen({ userId, planetId: planet.planetId, stageId: s.stageId });
+      }
+    }
 
     const normalStages = planet.stages.filter(s => !s.meta?.isMatchStage);
     const completedStages = normalStages.filter(s => s.meta?.isCompleted).length;

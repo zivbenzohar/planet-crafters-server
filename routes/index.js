@@ -12,7 +12,6 @@ router.use("/api/hex-tiles", require("./api/hexTiles"));
 router.use("/api/planets", require("./api/planet"));
 router.use("/api/planet-state", require("./api/planetState"));
 router.use("/api/achievements", require("./api/achievements"));
-router.use("/api/matches", require("./api/match"));
 router.use("/api/boosters", require("./api/boosters"));
 router.use("/api/wheel", require("./api/wheel"));
 router.use("/api/shop", require("./api/shop"));

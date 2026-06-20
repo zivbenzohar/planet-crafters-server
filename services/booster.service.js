@@ -12,8 +12,6 @@ async function grantBooster(userId, boosterType, amount = 1) {
   if (!VALID_TYPES.includes(boosterType)) throw new Error(`Unknown booster type: ${boosterType}`);
   const field = `boosters.${boosterType}`;
   await User.updateOne({ _id: userId }, { $inc: { [field]: amount } });
-  const after = await getBoosters(userId);
-  console.log(`[Booster] GRANT +${amount} ${boosterType} → user ${userId} | inventory:`, after);
 }
 
 async function consumeBooster(userId, boosterType) {
@@ -27,8 +25,6 @@ async function consumeBooster(userId, boosterType) {
 
   const field = `boosters.${boosterType}`;
   await User.updateOne({ _id: userId }, { $inc: { [field]: -1 } });
-  const after = await getBoosters(userId);
-  console.log(`[Booster] CONSUME -1 ${boosterType} → user ${userId} | inventory:`, after);
 }
 
 module.exports = { getBoosters, grantBooster, consumeBooster, VALID_TYPES };
