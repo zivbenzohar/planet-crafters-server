@@ -115,6 +115,7 @@ async function getOrCreateActivePlanet({
   totalStages = 19,
 }) {
   let planet = await Planet.findOne({ userId, planetId }).lean();
+  let wasCreated = false;
 
   // If planet doesn't exist — create it with stages
   if (!planet) {
@@ -124,6 +125,7 @@ async function getOrCreateActivePlanet({
       stages: createInitialStagesWithCoords(totalStages),
     });
     planet = created.toObject();
+    wasCreated = true;
   }
 
   // If exists but stages are missing/empty — initialize
@@ -133,9 +135,10 @@ async function getOrCreateActivePlanet({
       { $set: { stages: createInitialStagesWithCoords(totalStages) } },
       { new: true }
     ).lean();
+    wasCreated = true;
   }
 
-  return planet;
+  return { planet, wasCreated };
 }
 
 module.exports = {

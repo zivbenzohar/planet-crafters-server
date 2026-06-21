@@ -942,4 +942,5 @@ module.exports = {
   createDeckAndHand,
   cancelLastTile,
   addHexToHand,
+  enqueuePreGen,
 };

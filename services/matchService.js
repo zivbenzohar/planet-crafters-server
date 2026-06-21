@@ -1,12 +1,10 @@
 const crypto = require('crypto');
-const EventEmitter = require('events');
 const Planet = require('../model/Planet_model');
 const User = require('../model/User_model');
 const { createDeckAndHand } = require('./planetState.service');
 const { evaluateAchievementEvents } = require('./achievement.service');
 
 const matches = {};
-const matchEvents = new EventEmitter();
 
 function generateCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -16,101 +14,8 @@ function generateId() {
   return crypto.randomBytes(16).toString('hex');
 }
 
-async function createMatch(userId, planetId, stageId, duration = 180) {
-  const matchId = generateId();
-  const code = generateCode();
-
-  const match = {
-    matchId,
-    code,
-    status: 'waiting',
-    duration,
-    startTime: null,
-    players: [{ userId, planetId, stageId, score: 0, finished: false }],
-    winnerId: undefined,
-  };
-
-  matches[matchId] = match;
-  matches[`code:${code}`] = matchId;
-
-  return match;
-}
-
-async function joinMatch(code, userId, planetId, stageId) {
-  const matchId = matches[`code:${code}`];
-  if (!matchId) throw new Error('Room not found');
-
-  const match = matches[matchId];
-  if (!match) throw new Error('Room not found');
-  if (match.status !== 'waiting') throw new Error('Room already started');
-  if (match.players.find(p => p.userId === userId)) throw new Error('Already in this room');
-  if (match.players.length >= 2) throw new Error('Room is full');
-
-  match.players.push({ userId, planetId, stageId, score: 0, finished: false });
-
-  // Create stages and deck BEFORE marking as active — if this fails, match stays 'waiting'
-  const matchStageId = `match_${matchId}`;
-  match.matchStageId = matchStageId;
-
-  // Generate one shared deck so both players get identical tiles
-  const { hand, deck } = await createDeckAndHand(30, 3, { level: 1 });
-  const sharedState = {
-    map: { placedTiles: [] },
-    hand,
-    deck,
-    progress: { developedPercent: 0, score: 0, isCompleted: false },
-  };
-
-  for (const player of match.players) {
-    await Planet.updateOne(
-      {
-        userId: player.userId,
-        planetId: player.planetId,
-        'stages.stageId': { $ne: matchStageId },
-      },
-      {
-        $push: {
-          stages: {
-            stageId: matchStageId,
-            meta: {
-              coord: { q: 0, r: 0 },
-              level: 1,
-              resourceType: 'terra',
-              isUnlocked: true,
-              isStarted: false,
-              isCompleted: false,
-              isMatchStage: true,
-            },
-            state: sharedState,
-          },
-        },
-      }
-    );
-  }
-
-  // Only mark active after stages are successfully created
-  match.status = 'active';
-  match.startTime = null;
-
-  return match;
-}
-
 function getMatchRaw(matchId) {
   return matches[matchId] ?? null;
-}
-
-function getMatch(matchId) {
-  const match = matches[matchId];
-  if (!match) throw new Error('Match not found');
-
-  if (match.status === 'active' && match.startTime !== null) {
-    const elapsed = (Date.now() - match.startTime) / 1000;
-    if (elapsed >= match.duration) {
-      _endMatch(match);
-    }
-  }
-
-  return match;
 }
 
 function playerReady(matchId, userId) {
@@ -150,7 +55,6 @@ function submitFinalScore(matchId, userId, finalScore) {
   player.score = finalScore;
   player.finished = true;
 
-  matchEvents.emit('playerFinished', { matchId, finishedUserId: userId });
   _endMatch(match);
 
   return match;
@@ -160,7 +64,6 @@ function _endMatch(match) {
   if (match.status === 'finished') return;
   match.status = 'finished';
 
-  // Only calculate winner from scores if not already forced (e.g. forfeit)
   if (match.winnerId === undefined) {
     if (match.players.length < 2) {
       match.winnerId = match.players[0]?.userId ?? null;
@@ -172,7 +75,6 @@ function _endMatch(match) {
     }
   }
 
-  // Award +2 coins to winner
   if (match.winnerId) {
     User.updateOne(
       { _id: match.winnerId },
@@ -185,7 +87,6 @@ function _endMatch(match) {
     .catch(err => console.error('[Match] Achievement update error:', err))
     .finally(() => { match._achievementsPromise = null; });
 
-  // Clean up temporary match stages from each player's planet
   if (match.matchStageId) {
     for (const player of match.players) {
       Planet.updateOne(
@@ -210,7 +111,6 @@ async function recordFinishedMatchAchievements(match) {
       events.push({ metricKey: 'multi.matches_won', mode: 'inc', value: 1 });
     }
 
-    // Win streak: increment on win, reset to 0 on loss/tie
     const UserAchievement = require('../model/UserAchievement_model');
     const streakDoc = await UserAchievement.findOne({
       userId: player.userId,
@@ -222,7 +122,6 @@ async function recordFinishedMatchAchievements(match) {
     if (newStreak > 0) {
       events.push({ metricKey: 'multi.win_streak', mode: 'max', value: newStreak });
     } else {
-      // Reset streak tracking — set progress to 0 for all streak achievements
       await UserAchievement.updateMany(
         { userId: player.userId, achievementId: { $in: ['multi_008', 'multi_009', 'multi_010'] }, completed: false },
         { $set: { progress: 0 } }
@@ -287,6 +186,12 @@ async function createMatchForTwo(player1, player2, duration = 180) {
   return match;
 }
 
+function endMatchByTimeout(matchId) {
+  const match = matches[matchId];
+  if (!match || match.status !== 'active') return;
+  _endMatch(match);
+}
+
 function forceEndMatch(matchId) {
   const match = matches[matchId];
   if (match) _endMatch(match);
@@ -295,10 +200,12 @@ function forceEndMatch(matchId) {
 function forfeitMatch(matchId, forfeitingUserId) {
   const match = matches[matchId];
   if (!match || match.status !== 'active') return;
-  // Force the other player as winner regardless of scores
   const winner = match.players.find(p => p.userId !== forfeitingUserId);
   if (winner) match.winnerId = winner.userId;
   _endMatch(match);
 }
 
-module.exports = { createMatch, joinMatch, getMatch, getMatchRaw, playerReady, updateScore, submitFinalScore, createMatchForTwo, forceEndMatch, forfeitMatch, matchEvents };
+module.exports = {
+  getMatchRaw, playerReady, updateScore, submitFinalScore,
+  createMatchForTwo, forceEndMatch, forfeitMatch, endMatchByTimeout,
+};

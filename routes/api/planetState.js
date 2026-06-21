@@ -108,9 +108,10 @@ router.post("/:planetId/:stageId/cancel-tile", auth, async (req, res) => {
     const result = await cancelLastTile({ userId, planetId, stageId });
     return res.json(result);
   } catch (e) {
-    console.error("CANCEL-TILE error:", e);
     const clientErrors = ["No placement to cancel", "Cannot undo", "No cancelPlacement", "not found", "not initialized"];
     const isClientError = clientErrors.some(msg => e.message.includes(msg));
+    if (isClientError) console.warn("CANCEL-TILE:", e.message);
+    else console.error("CANCEL-TILE error:", e);
     return res.status(isClientError ? 400 : 500).json({ msg: e.message });
   }
 });
