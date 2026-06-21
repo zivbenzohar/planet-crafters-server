@@ -31,20 +31,26 @@ async function emitMatchFinished(io, match) {
   }
 }
 
-// Emit matchFinished to one socket (disconnect case — opponent may not be in the vs_ room yet).
-async function emitMatchFinishedToSocket(match, targetSocket) {
-  if (match._achievementsPromise) {
-    try { await match._achievementsPromise; } catch (e) {
-      console.error('[vsSocket] achievements error:', e.message);
-    }
-  }
-  const rewards = match.achievementsByPlayer?.[targetSocket.data.userId] ?? [];
+// Emit matchFinished to one socket immediately (disconnect case).
+// Achievements are sent in a follow-up event once processing completes.
+function emitMatchFinishedToSocket(match, targetSocket) {
   targetSocket.emit('matchFinished', {
     matchId:           match.matchId,
     winnerId:          match.winnerId ?? null,
     players:           match.players.map(p => ({ userId: p.userId, username: p.username, score: p.score })),
-    achievementRewards: rewards,
+    achievementRewards: [],
   });
+
+  if (match._achievementsPromise) {
+    match._achievementsPromise
+      .then(() => {
+        const rewards = match.achievementsByPlayer?.[targetSocket.data.userId] ?? [];
+        if (rewards.length > 0 && targetSocket.connected) {
+          targetSocket.emit('achievementRewards', { matchId: match.matchId, rewards });
+        }
+      })
+      .catch(e => console.error('[vsSocket] achievements error:', e.message));
+  }
 }
 
 module.exports = (io) => {
