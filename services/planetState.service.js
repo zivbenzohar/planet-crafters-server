@@ -163,7 +163,7 @@ async function getStageState({ userId, planetId, stageId, deckSize }) {
   const isAlreadyStarted = stage.meta?.isStarted === true;
   const isCompleted = state.progress?.isCompleted === true;
 
-  if ((!hasDeck && !hasHand && !isAlreadyStarted) || isCompleted) {
+  if ((!hasDeck && !hasHand) || isCompleted) {
     let usedPreGen = false;
 
     if (!isCompleted && _activePregens.has(stageId)) {
