@@ -34,8 +34,12 @@ async function _doPreGenerate({ userId, planetId, stageId, deckSize = 30 }) {
 
       const { tileIds } = await generateStageDeck({ level, targetScore, tiles, deckSize });
 
-      const preHand = { maxHandSize: 3, tilesInHand: tileIds.slice(0, 3) };
-      const preDeck = { remainingTiles: tileIds.slice(3) };
+      const preState = {
+        map: { placedTiles: [] },
+        hand: { maxHandSize: 3, tilesInHand: tileIds.slice(0, 3) },
+        deck: { remainingTiles: tileIds.slice(3) },
+        progress: { developedPercent: 0, score: 0, isCompleted: false },
+      };
 
       await Planet.updateOne(
         {
@@ -47,7 +51,7 @@ async function _doPreGenerate({ userId, planetId, stageId, deckSize = 30 }) {
             },
           },
         },
-        { $set: { 'stages.$.state.hand': preHand, 'stages.$.state.deck': preDeck } }
+        { $set: { 'stages.$.state': preState } }
       );
       console.log(`[preGenerate] Deck ready for stage ${stageId}`);
     } catch (err) {
@@ -166,15 +170,15 @@ async function getStageState({ userId, planetId, stageId, deckSize }) {
   if ((!hasDeck && !hasHand) || isCompleted) {
     let usedPreGen = false;
 
-    if (!isCompleted && _activePregens.has(stageId)) {
-      // Background pre-gen is running — wait for it instead of generating a second deck
+    if (_activePregens.has(stageId)) {
+      // Background pre-gen is running on this instance — wait for it
       await _activePregens.get(stageId);
       const refreshed = await Planet.findOne(
         { userId, planetId, 'stages.stageId': stageId },
         { stages: { $elemMatch: { stageId } } }
       ).lean();
       const preFilled = refreshed?.stages?.[0]?.state;
-      if (preFilled?.hand?.tilesInHand?.length > 0) {
+      if (preFilled?.hand?.tilesInHand?.length > 0 && !preFilled?.progress?.isCompleted) {
         state = preFilled;
         usedPreGen = true;
         await Planet.updateOne(
@@ -182,10 +186,23 @@ async function getStageState({ userId, planetId, stageId, deckSize }) {
           { $set: { 'stages.$.meta.isStarted': true, 'stages.$.meta.lastPlayedAt': new Date() } }
         );
       }
-      // If pre-gen failed (preFilled empty) — falls through to inline generation below
     } else {
-      // Stage is in queue but player needs it now — remove and generate inline
+      // No active pre-gen on this instance — remove from queue and check DB
+      // (another server instance may have already written a pre-gen result)
       _removeFromQueue(stageId);
+      const refreshed = await Planet.findOne(
+        { userId, planetId, 'stages.stageId': stageId },
+        { stages: { $elemMatch: { stageId } } }
+      ).lean();
+      const preFilled = refreshed?.stages?.[0]?.state;
+      if (preFilled?.hand?.tilesInHand?.length > 0 && !preFilled?.progress?.isCompleted) {
+        state = preFilled;
+        usedPreGen = true;
+        await Planet.updateOne(
+          { userId, planetId, 'stages.stageId': stageId },
+          { $set: { 'stages.$.meta.isStarted': true, 'stages.$.meta.lastPlayedAt': new Date() } }
+        );
+      }
     }
 
     if (!usedPreGen) {
