@@ -11,23 +11,26 @@ function broadcastLobby(io) {
   io.to('lobby').emit('lobbyUpdate', { players });
 }
 
-// Wait for achievements then emit matchFinished to every socket in the vs_ room.
+// Emit matchFinished immediately, then follow up with achievements once they resolve.
 async function emitMatchFinished(io, match) {
-  if (match._achievementsPromise) {
-    try { await match._achievementsPromise; } catch (e) {
-      console.error('[vsSocket] achievements error:', e.message);
-    }
-  }
+  io.to(`vs_${match.matchId}`).emit('matchFinished', {
+    matchId:            match.matchId,
+    winnerId:           match.winnerId ?? null,
+    players:            match.players.map(p => ({ userId: p.userId, username: p.username, score: p.score })),
+    achievementRewards: [],
+  });
 
-  const sockets = await io.in(`vs_${match.matchId}`).fetchSockets();
-  for (const s of sockets) {
-    const rewards = match.achievementsByPlayer?.[s.data.userId] ?? [];
-    s.emit('matchFinished', {
-      matchId:           match.matchId,
-      winnerId:          match.winnerId ?? null,
-      players:           match.players.map(p => ({ userId: p.userId, username: p.username, score: p.score })),
-      achievementRewards: rewards,
-    });
+  if (match._achievementsPromise) {
+    match._achievementsPromise
+      .then(async () => {
+        const sockets = await io.in(`vs_${match.matchId}`).fetchSockets();
+        for (const s of sockets) {
+          const rewards = match.achievementsByPlayer?.[s.data.userId] ?? [];
+          if (rewards.length > 0)
+            s.emit('achievementRewards', { matchId: match.matchId, rewards });
+        }
+      })
+      .catch(e => console.error('[vsSocket] achievements error:', e.message));
   }
 }
 

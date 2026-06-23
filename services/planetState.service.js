@@ -603,20 +603,20 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation, a
 
   // Calculate coins awarded on completion
   const tilesRemaining = newHand.length + newDeck.length;
-  const newlyAwardedStageCoins = justCompleted
-    ? tilesRemaining >= 6 ? 3 : tilesRemaining >= 3 ? 2 : 1
+  // Current run's stars — awarded every completion
+  const currentRunCoins = isCompleted
+    ? (tilesRemaining >= 6 ? 3 : tilesRemaining >= 3 ? 2 : 1)
     : 0;
-  const coinsAwarded = isCompleted
-    ? (justCompleted ? newlyAwardedStageCoins : (stage.meta?.coinsAwarded ?? 0))
-    : 0;
+  const newlyAwardedStageCoins = currentRunCoins;
+  const coinsAwarded = currentRunCoins;
 
   const updateFields = {
     "stages.$.state": newState,
     "stages.$.meta.lastPlayedAt": new Date(),
   };
-  if (justCompleted) {
+  if (isCompleted) {
     updateFields["stages.$.meta.isCompleted"] = true;
-    updateFields["stages.$.meta.coinsAwarded"] = newlyAwardedStageCoins;
+    updateFields["stages.$.meta.coinsAwarded"] = currentRunCoins;
   }
 
   // ── Normal tile: parallel save + achievement evaluation ──────────────────
@@ -627,7 +627,7 @@ async function placeTile({ userId, planetId, stageId, tileId, coord, rotation, a
   let userCoins = null;
   let achievementResult;
 
-  if (!justCompleted) {
+  if (!isCompleted) {
     // Build events synchronously (no awaits needed when not completing)
     const achievementEvents = buildAchievementEvents({
       isMatchStage,
